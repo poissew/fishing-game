@@ -1,10 +1,15 @@
-[gd_scene load_steps=3 format=3 uid="uid://divlt8ggdx0xy"]
+[gd_scene load_steps=4 format=3 uid="uid://divlt8ggdx0xy"]
 
 [ext_resource type="Script" uid="uid://c46a21g7n5yi8" path="res://classes/player.gd" id="1_8ak8y"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_gndvh"]
 radius = 0.3
 height = 1.78
+
+[sub_resource type="Environment" id="Environment_8ak8y"]
+background_mode = 1
+ambient_light_source = 2
+ambient_light_color = Color(1, 1, 1, 1)
 
 [node name="Player" type="CharacterBody3D"]
 script = ExtResource("1_8ak8y")
@@ -16,3 +21,4 @@ shape = SubResource("CapsuleShape3D_gndvh")
 
 [node name="Camera3D" type="Camera3D" parent="head"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.60854167, 0)
+environment = SubResource("Environment_8ak8y")

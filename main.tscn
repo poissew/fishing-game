@@ -1,7 +1,13 @@
-[gd_scene load_steps=3 format=3 uid="uid://crf5qhlis35is"]
+[gd_scene load_steps=5 format=3 uid="uid://crf5qhlis35is"]
 
 [ext_resource type="PackedScene" uid="uid://rxhhaxkjo46f" path="res://objects/Fish.tscn" id="1_ig7tw"]
 [ext_resource type="PackedScene" uid="uid://divlt8ggdx0xy" path="res://objects/Player.tscn" id="2_0xm2m"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_0xm2m"]
+albedo_color = Color(0.099985994, 0.09998601, 0.099985965, 1)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_h2yge"]
+size = Vector3(18.105, 0.495, 15.945)
 
 [node name="main" type="Node3D"]
 
@@ -9,3 +15,15 @@
 
 [node name="Player" parent="." instance=ExtResource("2_0xm2m")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1.5662911)
+
+[node name="level" type="Node3D" parent="."]
+
+[node name="plaque" type="StaticBody3D" parent="level"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.8726702, 0)
+
+[node name="CSGBox3D" type="CSGBox3D" parent="level/plaque"]
+size = Vector3(18.105, 0.495, 15.945)
+material = SubResource("StandardMaterial3D_0xm2m")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="level/plaque"]
+shape = SubResource("BoxShape3D_h2yge")
