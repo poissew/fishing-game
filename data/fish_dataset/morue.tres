@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="FishData" load_steps=5 format=3 uid="uid://bg80eegtrtm45"]
+
+[ext_resource type="Script" uid="uid://b3tnjarefmysf" path="res://classes/fish_data.gd" id="1_31gdu"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_31gdu"]
+
+[sub_resource type="TextMesh" id="TextMesh_d2ngw"]
+material = SubResource("StandardMaterial3D_31gdu")
+text = "morue
+"
+
+[sub_resource type="Curve" id="Curve_1rbg8"]
+_limits = [0.5, 5.0, 0.0, 1.0]
+_data = [Vector2(0, 0.5), 0.0, 2.084385, 0, 0, Vector2(1, 5), 8.275869, 0.0, 0, 0]
+point_count = 2
+
+[resource]
+script = ExtResource("1_31gdu")
+min_size = 0.3
+max_size = 0.9
+base_value = 3
+mesh = SubResource("TextMesh_d2ngw")
+inv_sizing = Vector2i(1, 2)
+price_curve = SubResource("Curve_1rbg8")
+name = "Cod"
+metadata/_custom_type_script = "uid://b3tnjarefmysf"

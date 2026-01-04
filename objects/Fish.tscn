@@ -1,0 +1,10 @@
+[gd_scene load_steps=3 format=3 uid="uid://rxhhaxkjo46f"]
+
+[ext_resource type="Script" uid="uid://busp32f7m77ja" path="res://classes/fish.gd" id="1_gf7mk"]
+[ext_resource type="Resource" uid="uid://bg80eegtrtm45" path="res://data/fish_dataset/morue.tres" id="2_taofj"]
+
+[node name="Fish" type="Node3D"]
+script = ExtResource("1_gf7mk")
+data = ExtResource("2_taofj")
+
+[node name="model" type="MeshInstance3D" parent="."]
