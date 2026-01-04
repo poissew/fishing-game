@@ -12,6 +12,7 @@ size = Vector3(18.105, 0.495, 15.945)
 [node name="main" type="Node3D"]
 
 [node name="Fish" parent="." instance=ExtResource("1_ig7tw")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5040691, -2.806616)
 
 [node name="Player" parent="." instance=ExtResource("2_0xm2m")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1.5662911)
@@ -19,7 +20,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1.5662911)
 [node name="level" type="Node3D" parent="."]
 
 [node name="plaque" type="StaticBody3D" parent="level"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.8726702, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -1.2475832, 0)
 
 [node name="CSGBox3D" type="CSGBox3D" parent="level/plaque"]
 size = Vector3(18.105, 0.495, 15.945)

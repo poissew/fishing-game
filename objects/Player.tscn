@@ -22,3 +22,7 @@ shape = SubResource("CapsuleShape3D_gndvh")
 [node name="Camera3D" type="Camera3D" parent="head"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.60854167, 0)
 environment = SubResource("Environment_8ak8y")
+
+[node name="CSGCylinder3D" type="CSGCylinder3D" parent="."]
+radius = 0.3
+height = 1.78
