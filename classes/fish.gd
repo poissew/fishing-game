@@ -5,15 +5,15 @@ extends Node3D
 var current_size: float = 0.0
 var current_value: float = 0.0
 
-@onready var model: MeshInstance3D = $model
+@onready var model: Node3D = $model
 
 func _ready() -> void:
 	if model == null :
 		model = find_child("model")
-	model.mesh = data.mesh
+	model.add_child(data.mesh.instantiate())
 	_apply_random_scale()
 
 func _apply_random_scale() -> void:
 	var scale_factor := randomizer.RNG.randf_range(data.min_size, data.max_size)
-	model.scale = Vector3.ONE * scale_factor
+	model.scale = Vector3.ONE * scale_factor * 0.15
 	current_size = scale_factor

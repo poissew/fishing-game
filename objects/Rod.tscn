@@ -1,0 +1,13 @@
+[gd_scene load_steps=2 format=3 uid="uid://dwaeg2c85obtm"]
+
+[ext_resource type="Script" uid="uid://cn8sy36iusti8" path="res://classes/rod.gd" id="1_hidgu"]
+
+[node name="Rod" type="Node3D"]
+script = ExtResource("1_hidgu")
+
+[node name="CSGTorus3D" type="CSGTorus3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, 0, 0, 0)
+inner_radius = 0.165
+outer_radius = 0.33
+sides = 16
+ring_sides = 9

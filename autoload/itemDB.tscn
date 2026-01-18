@@ -1,0 +1,10 @@
+[gd_scene load_steps=5 format=3 uid="uid://d0lnff1d1nsch"]
+
+[ext_resource type="Script" uid="uid://c46nc7qmu3lsp" path="res://item_db.gd" id="1_d7wpg"]
+[ext_resource type="Script" uid="uid://cma1hnb7e5v40" path="res://classes/item.gd" id="2_305c5"]
+[ext_resource type="Resource" uid="uid://bg80eegtrtm45" path="res://data/items/fish/cod.tres" id="3_u8f0o"]
+[ext_resource type="Resource" uid="uid://dkf0pnftj7l2c" path="res://data/items/rods/default_rod.tres" id="4_b2ouy"]
+
+[node name="ItemDb" type="Node"]
+script = ExtResource("1_d7wpg")
+item_list = Array[ExtResource("2_305c5")]([ExtResource("3_u8f0o"), ExtResource("4_b2ouy")])

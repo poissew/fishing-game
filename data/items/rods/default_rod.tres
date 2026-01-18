@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="RodData" load_steps=3 format=3 uid="uid://dkf0pnftj7l2c"]
+
+[ext_resource type="Script" uid="uid://b1ohinxs3jeo1" path="res://classes/rod_data.gd" id="1_qep2k"]
+[ext_resource type="Texture2D" uid="uid://bhpibbpddih7u" path="res://icon.svg" id="1_qpoi0"]
+
+[resource]
+script = ExtResource("1_qep2k")
+power = 1.0
+durability_max = 15.0
+reel_speed = 1.0
+id = 100
+name = "Wooden Rod"
+icon = ExtResource("1_qpoi0")
+size = Vector2i(1, 2)
+metadata/_custom_type_script = "uid://b1ohinxs3jeo1"

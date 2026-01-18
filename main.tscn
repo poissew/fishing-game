@@ -1,7 +1,19 @@
-[gd_scene load_steps=5 format=3 uid="uid://crf5qhlis35is"]
+[gd_scene load_steps=8 format=3 uid="uid://crf5qhlis35is"]
 
 [ext_resource type="PackedScene" uid="uid://rxhhaxkjo46f" path="res://objects/Fish.tscn" id="1_ig7tw"]
 [ext_resource type="PackedScene" uid="uid://divlt8ggdx0xy" path="res://objects/Player.tscn" id="2_0xm2m"]
+
+[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_0xm2m"]
+sky_horizon_color = Color(0.66224277, 0.6717428, 0.6867428, 1)
+ground_horizon_color = Color(0.66224277, 0.6717428, 0.6867428, 1)
+
+[sub_resource type="Sky" id="Sky_h2yge"]
+sky_material = SubResource("ProceduralSkyMaterial_0xm2m")
+
+[sub_resource type="Environment" id="Environment_1bvp3"]
+background_mode = 2
+sky = SubResource("Sky_h2yge")
+tonemap_mode = 2
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_0xm2m"]
 albedo_color = Color(0.099985994, 0.09998601, 0.099985965, 1)
@@ -11,20 +23,42 @@ size = Vector3(18.105, 0.495, 15.945)
 
 [node name="main" type="Node3D"]
 
-[node name="Fish" parent="." instance=ExtResource("1_ig7tw")]
+[node name="pixel" type="SubViewportContainer" parent="."]
+texture_filter = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+stretch = true
+stretch_shrink = 8
+
+[node name="SubViewport" type="SubViewport" parent="pixel"]
+handle_input_locally = false
+size = Vector2i(240, 135)
+render_target_update_mode = 4
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="pixel/SubViewport"]
+transform = Transform3D(-0.8660254, -0.43301278, 0.25, 0, 0.49999997, 0.86602545, -0.50000006, 0.75, -0.43301266, 0, 0, 0)
+shadow_enabled = true
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="pixel/SubViewport"]
+environment = SubResource("Environment_1bvp3")
+
+[node name="Fish" parent="pixel/SubViewport" instance=ExtResource("1_ig7tw")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5040691, -2.806616)
 
-[node name="Player" parent="." instance=ExtResource("2_0xm2m")]
+[node name="Player" parent="pixel/SubViewport" instance=ExtResource("2_0xm2m")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1.5662911)
 
-[node name="level" type="Node3D" parent="."]
+[node name="level" type="Node3D" parent="pixel/SubViewport"]
 
-[node name="plaque" type="StaticBody3D" parent="level"]
+[node name="plaque" type="StaticBody3D" parent="pixel/SubViewport/level"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -1.2475832, 0)
 
-[node name="CSGBox3D" type="CSGBox3D" parent="level/plaque"]
+[node name="CSGBox3D" type="CSGBox3D" parent="pixel/SubViewport/level/plaque"]
 size = Vector3(18.105, 0.495, 15.945)
 material = SubResource("StandardMaterial3D_0xm2m")
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="level/plaque"]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="pixel/SubViewport/level/plaque"]
 shape = SubResource("BoxShape3D_h2yge")
