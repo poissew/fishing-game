@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="FishData" format=3 uid="uid://b70u8aoi8cy88"]
+
+[ext_resource type="Script" uid="uid://b3tnjarefmysf" path="res://classes/fish_data.gd" id="1_5rsej"]
+
+[resource]
+script = ExtResource("1_5rsej")
+min_size = 0.2
+max_size = 0.8
+base_value = 3
+rarity = 2
+weight = 12
+id = 6
+name = "Goldfish"
+metadata/_custom_type_script = "uid://b3tnjarefmysf"

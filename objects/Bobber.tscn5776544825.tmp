@@ -1,0 +1,26 @@
+[gd_scene format=3 uid="uid://catnewoi8jmyp"]
+
+[ext_resource type="Texture2D" uid="uid://13vs16eiq1d2" path="res://textures/Fishing_Bobber_JE1.png" id="1_6mwrx"]
+[ext_resource type="Script" uid="uid://1xabsq4dvpkn" path="res://scripts/bobber.gd" id="1_xf76f"]
+
+[sub_resource type="SphereShape3D" id="SphereShape3D_6mwrx"]
+radius = 0.1
+
+[node name="Bobber" type="RigidBody3D" unique_id=251279386]
+script = ExtResource("1_xf76f")
+
+[node name="Sprite3D" type="Sprite3D" parent="." unique_id=955191806]
+pixel_size = 0.02
+billboard = 2
+texture_filter = 0
+texture = ExtResource("1_6mwrx")
+
+[node name="Area3D" type="Area3D" parent="." unique_id=1938368702]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Area3D" unique_id=1092468253]
+shape = SubResource("SphereShape3D_6mwrx")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=152902605]
+shape = SubResource("SphereShape3D_6mwrx")
+
+[connection signal="body_entered" from="." to="." method="_on_body_entered"]

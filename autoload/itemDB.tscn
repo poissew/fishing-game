@@ -1,10 +1,15 @@
-[gd_scene load_steps=5 format=3 uid="uid://d0lnff1d1nsch"]
+[gd_scene format=3 uid="uid://d0lnff1d1nsch"]
 
 [ext_resource type="Script" uid="uid://c46nc7qmu3lsp" path="res://item_db.gd" id="1_d7wpg"]
 [ext_resource type="Script" uid="uid://cma1hnb7e5v40" path="res://classes/item.gd" id="2_305c5"]
 [ext_resource type="Resource" uid="uid://bg80eegtrtm45" path="res://data/items/fish/cod.tres" id="3_u8f0o"]
 [ext_resource type="Resource" uid="uid://dkf0pnftj7l2c" path="res://data/items/rods/default_rod.tres" id="4_b2ouy"]
+[ext_resource type="Resource" uid="uid://ddbyn5myydk8r" path="res://data/items/fish/catfish.tres" id="5_xsm0o"]
+[ext_resource type="Resource" uid="uid://jy46wdveydwa" path="res://data/items/fish/sardine.tres" id="6_vuvht"]
+[ext_resource type="Resource" uid="uid://b70u8aoi8cy88" path="res://data/items/fish/goldfish.tres" id="7_im31p"]
+[ext_resource type="Resource" uid="uid://bjqkwk7c5hdg8" path="res://data/items/fish/shark.tres" id="8_16d78"]
+[ext_resource type="Resource" uid="uid://d2bfpkgsak1v0" path="res://data/items/fish/trout.tres" id="9_nqwoa"]
 
-[node name="ItemDb" type="Node"]
+[node name="ItemDb" type="Node" unique_id=73838295]
 script = ExtResource("1_d7wpg")
-item_list = Array[ExtResource("2_305c5")]([ExtResource("3_u8f0o"), ExtResource("4_b2ouy")])
+item_list = Array[ExtResource("2_305c5")]([ExtResource("3_u8f0o"), ExtResource("4_b2ouy"), ExtResource("5_xsm0o"), ExtResource("6_vuvht"), ExtResource("7_im31p"), ExtResource("8_16d78"), ExtResource("9_nqwoa")])

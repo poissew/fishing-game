@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="FishData" format=3 uid="uid://jy46wdveydwa"]
+
+[ext_resource type="Script" uid="uid://b3tnjarefmysf" path="res://classes/fish_data.gd" id="1_5rsej"]
+
+[resource]
+script = ExtResource("1_5rsej")
+min_size = 0.2
+max_size = 0.8
+base_value = 3
+weight = 21
+id = 5
+name = "Sardine"
+metadata/_custom_type_script = "uid://b3tnjarefmysf"

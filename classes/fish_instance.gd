@@ -6,7 +6,7 @@ extends ItemInstance
 @export var quality: int
 
 func get_value() -> int:
-	var fish_data := data as FishData
+	var fish_data:Item = data as FishData
 	return int(fish_data.base_value * (size / fish_data.max_size))
 
 func create_fish_instance(fish_data: FishData) -> FishInstance:

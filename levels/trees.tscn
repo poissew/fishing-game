@@ -1,0 +1,26 @@
+[gd_scene format=3 uid="uid://4chscs7fhuo3"]
+
+[ext_resource type="Texture2D" uid="uid://cvuv7v5dttbbx" path="res://textures/text_grass.jpg" id="1_u0xm0"]
+[ext_resource type="PackedScene" uid="uid://d44a8b31gtht" path="res://objects/scene/tree.tscn" id="2_gh6mx"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_gh6mx"]
+albedo_texture = ExtResource("1_u0xm0")
+albedo_texture_force_srgb = true
+uv1_scale = Vector3(0.9, 0.9, 0.9)
+uv1_triplanar = true
+
+[node name="Trees" type="Node3D" unique_id=1273550201]
+
+[node name="CSGCombiner3D" type="CSGCombiner3D" parent="." unique_id=339179971]
+use_collision = true
+
+[node name="CSGBox3D" type="CSGBox3D" parent="CSGCombiner3D" unique_id=1155059797]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.1012926, -0.36596668, -1.9788424)
+size = Vector3(7.5097656, 0.2680664, 7.995758)
+material = SubResource("StandardMaterial3D_gh6mx")
+
+[node name="Tree" parent="." unique_id=192809811 instance=ExtResource("2_gh6mx")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.388, 2.111, -2.041)
+
+[node name="Tree2" parent="." unique_id=837769575 instance=ExtResource("2_gh6mx")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.5862293, 2.1446736, -3.7027087)

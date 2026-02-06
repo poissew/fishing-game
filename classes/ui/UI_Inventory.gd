@@ -11,7 +11,6 @@ var selected_slot := -1
 
 func bind_inventory(inv: Inventory):
 	inventory = inv
-	_refresh()
 
 func _refresh():
 	for i in grid.get_child_count():

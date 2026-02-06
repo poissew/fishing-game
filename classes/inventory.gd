@@ -52,3 +52,56 @@ func rotate_item(item: ItemInstance) -> bool:
 		return false
 
 	return true
+
+func has_space_for(item: ItemInstance) -> bool:
+	# ne modifie rien, juste teste
+	var footprint := item.get_footprint()
+	for y in range(height - footprint.y + 1):
+		for x in range(width - footprint.x + 1):
+			if can_place(item, Vector2i(x, y)):
+				return true
+
+	# Si rotatable, on teste aussi la rotation (sans modifier l'item définitivement)
+	if item.data.rotatable:
+		var old_rot := item.rotated
+		item.rotated = !old_rot
+		footprint = item.get_footprint()
+
+		for y in range(height - footprint.y + 1):
+			for x in range(width - footprint.x + 1):
+				if can_place(item, Vector2i(x, y)):
+					item.rotated = old_rot
+					return true
+
+		item.rotated = old_rot
+
+	return false
+
+
+func try_place_anywhere(item: ItemInstance, allow_rotate: bool = true) -> bool:
+	# essaie sans rotation
+	var footprint := item.get_footprint()
+	for y in range(height - footprint.y + 1):
+		for x in range(width - footprint.x + 1):
+			if place_item(item, Vector2i(x, y)):
+				return true
+
+	# essaie avec rotation
+	if allow_rotate and item.data.rotatable:
+		item.rotated = !item.rotated
+		footprint = item.get_footprint()
+
+		for y in range(height - footprint.y + 1):
+			for x in range(width - footprint.x + 1):
+				if place_item(item, Vector2i(x, y)):
+					return true
+
+		# rollback si échec
+		item.rotated = !item.rotated
+
+	return false
+
+
+func add_or_place(item: ItemInstance) -> bool:
+	# API simple pour le gameplay
+	return try_place_anywhere(item, true)

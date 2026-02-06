@@ -1,0 +1,27 @@
+[gd_scene format=3 uid="uid://d44a8b31gtht"]
+
+[ext_resource type="Texture2D" uid="uid://scqu146j6une" path="res://textures/tree.png" id="1_0qqbh"]
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_0qqbh"]
+radius = 1.0
+height = 6.408
+
+[node name="Tree" type="Node3D" unique_id=192809811]
+
+[node name="trunk2" type="Sprite3D" parent="." unique_id=210746359]
+transform = Transform3D(-8.742278e-08, 0, -2, 0, 2, 0, 2, 0, -8.742278e-08, 0, 0, 0)
+alpha_cut = 1
+texture_filter = 0
+texture = ExtResource("1_0qqbh")
+
+[node name="trunk1" type="Sprite3D" parent="." unique_id=205799599]
+transform = Transform3D(2, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0)
+alpha_cut = 1
+texture_filter = 0
+texture = ExtResource("1_0qqbh")
+
+[node name="StaticBody3D" type="StaticBody3D" parent="." unique_id=1369043971]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="StaticBody3D" unique_id=1046694739]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.0657959, 0)
+shape = SubResource("CapsuleShape3D_0qqbh")

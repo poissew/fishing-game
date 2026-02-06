@@ -1,11 +1,13 @@
-[gd_scene load_steps=3 format=3 uid="uid://rxhhaxkjo46f"]
+[gd_scene format=3 uid="uid://rxhhaxkjo46f"]
 
 [ext_resource type="Script" uid="uid://busp32f7m77ja" path="res://classes/fish.gd" id="1_gf7mk"]
 [ext_resource type="Resource" uid="uid://bg80eegtrtm45" path="res://data/items/fish/cod.tres" id="2_taofj"]
+[ext_resource type="ArrayMesh" uid="uid://dpdddmwlm8kvr" path="res://models/placeholder/chf_16cod_1_files/mesh0.res" id="3_taofj"]
 
-[node name="Fish" type="Node3D"]
+[node name="Fish" type="Node3D" unique_id=2070852920]
 script = ExtResource("1_gf7mk")
 data = ExtResource("2_taofj")
 
-[node name="model" type="MeshInstance3D" parent="."]
+[node name="model" type="MeshInstance3D" parent="." unique_id=1396718271]
 transform = Transform3D(0.3, 0, 0, 0, 0.3, 0, 0, 0, 0.3, 0, 0, 0)
+mesh = ExtResource("3_taofj")

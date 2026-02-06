@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="LootEntry" format=3 uid="uid://ckb7xnscg0qg3"]
+
+[ext_resource type="Resource" uid="uid://ddbyn5myydk8r" path="res://data/items/fish/catfish.tres" id="1_3psfr"]
+[ext_resource type="Script" uid="uid://dqh6hql80iexv" path="res://classes/loot/loot_entry.gd" id="2_4tuxp"]
+
+[resource]
+script = ExtResource("2_4tuxp")
+item = ExtResource("1_3psfr")
+weight = 19
+metadata/_custom_type_script = "uid://dqh6hql80iexv"

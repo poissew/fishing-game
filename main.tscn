@@ -1,4 +1,4 @@
-[gd_scene load_steps=8 format=3 uid="uid://crf5qhlis35is"]
+[gd_scene format=3 uid="uid://crf5qhlis35is"]
 
 [ext_resource type="PackedScene" uid="uid://rxhhaxkjo46f" path="res://objects/Fish.tscn" id="1_ig7tw"]
 [ext_resource type="PackedScene" uid="uid://divlt8ggdx0xy" path="res://objects/Player.tscn" id="2_0xm2m"]
@@ -11,9 +11,10 @@ ground_horizon_color = Color(0.66224277, 0.6717428, 0.6867428, 1)
 sky_material = SubResource("ProceduralSkyMaterial_0xm2m")
 
 [sub_resource type="Environment" id="Environment_1bvp3"]
-background_mode = 2
 sky = SubResource("Sky_h2yge")
+ambient_light_color = Color(1, 1, 1, 1)
 tonemap_mode = 2
+tonemap_exposure = 2.21
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_0xm2m"]
 albedo_color = Color(0.099985994, 0.09998601, 0.099985965, 1)
@@ -21,9 +22,15 @@ albedo_color = Color(0.099985994, 0.09998601, 0.099985965, 1)
 [sub_resource type="BoxShape3D" id="BoxShape3D_h2yge"]
 size = Vector3(18.105, 0.495, 15.945)
 
-[node name="main" type="Node3D"]
+[sub_resource type="BoxShape3D" id="BoxShape3D_0xm2m"]
+size = Vector3(5, 5, 5)
 
-[node name="pixel" type="SubViewportContainer" parent="."]
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_h2yge"]
+albedo_color = Color(0, 0.4117647, 0.4117647, 0.9137255)
+
+[node name="main" type="Node3D" unique_id=1873061108]
+
+[node name="pixel" type="SubViewportContainer" parent="." unique_id=328181620]
 texture_filter = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -31,34 +38,48 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 stretch = true
-stretch_shrink = 8
+stretch_shrink = 4
 
-[node name="SubViewport" type="SubViewport" parent="pixel"]
+[node name="SubViewport" type="SubViewport" parent="pixel" unique_id=151043387]
 handle_input_locally = false
-size = Vector2i(240, 135)
+size = Vector2i(480, 270)
 render_target_update_mode = 4
 
-[node name="DirectionalLight3D" type="DirectionalLight3D" parent="pixel/SubViewport"]
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="pixel/SubViewport" unique_id=1789370354]
 transform = Transform3D(-0.8660254, -0.43301278, 0.25, 0, 0.49999997, 0.86602545, -0.50000006, 0.75, -0.43301266, 0, 0, 0)
-shadow_enabled = true
+light_bake_mode = 1
 
-[node name="WorldEnvironment" type="WorldEnvironment" parent="pixel/SubViewport"]
+[node name="WorldEnvironment" type="WorldEnvironment" parent="pixel/SubViewport" unique_id=1570987331]
 environment = SubResource("Environment_1bvp3")
 
-[node name="Fish" parent="pixel/SubViewport" instance=ExtResource("1_ig7tw")]
+[node name="Fish" parent="pixel/SubViewport" unique_id=853877923 instance=ExtResource("1_ig7tw")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5040691, -2.806616)
 
-[node name="Player" parent="pixel/SubViewport" instance=ExtResource("2_0xm2m")]
+[node name="Player" parent="pixel/SubViewport" unique_id=308613746 instance=ExtResource("2_0xm2m")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1.5662911)
 
-[node name="level" type="Node3D" parent="pixel/SubViewport"]
+[node name="level" type="Node3D" parent="pixel/SubViewport" unique_id=443265260]
 
-[node name="plaque" type="StaticBody3D" parent="pixel/SubViewport/level"]
+[node name="plaque" type="StaticBody3D" parent="pixel/SubViewport/level" unique_id=1016046059]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -1.2475832, 0)
 
-[node name="CSGBox3D" type="CSGBox3D" parent="pixel/SubViewport/level/plaque"]
+[node name="CSGBox3D" type="CSGBox3D" parent="pixel/SubViewport/level/plaque" unique_id=1215288453]
 size = Vector3(18.105, 0.495, 15.945)
 material = SubResource("StandardMaterial3D_0xm2m")
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="pixel/SubViewport/level/plaque"]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="pixel/SubViewport/level/plaque" unique_id=1279552004]
 shape = SubResource("BoxShape3D_h2yge")
+
+[node name="water" type="Node3D" parent="pixel/SubViewport/level" unique_id=985210864]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -3.5020242, 10.217507)
+
+[node name="Area3D" type="Area3D" parent="pixel/SubViewport/level/water" unique_id=903186550 groups=["water"]]
+collision_layer = 2
+collision_mask = 2
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="pixel/SubViewport/level/water/Area3D" unique_id=1559289145]
+shape = SubResource("BoxShape3D_0xm2m")
+
+[node name="CSGBox3D" type="CSGBox3D" parent="pixel/SubViewport/level/water" unique_id=523328816]
+size = Vector3(5, 5, 5)
+material = SubResource("StandardMaterial3D_h2yge")

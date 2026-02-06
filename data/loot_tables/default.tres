@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="LootTable" format=3 uid="uid://bc7v3xw61ud7e"]
+
+[ext_resource type="Script" uid="uid://dqh6hql80iexv" path="res://classes/loot/loot_entry.gd" id="1_loqi6"]
+[ext_resource type="Resource" uid="uid://byisq47430fkj" path="res://data/loot_tables/entries/CodEntry.tres" id="2_2gc3c"]
+[ext_resource type="Script" uid="uid://dyr7434ivhnhf" path="res://classes/loot/loot_table.gd" id="2_qxh4f"]
+[ext_resource type="Resource" uid="uid://byj2716cjpfaa" path="res://data/loot_tables/entries/SharkEntry.tres" id="3_hgsor"]
+[ext_resource type="Resource" uid="uid://bj1b8proyllky" path="res://data/loot_tables/entries/TroutEntry.tres" id="4_08nxe"]
+[ext_resource type="Resource" uid="uid://ckb7xnscg0qg3" path="res://data/loot_tables/entries/CatfishEntry.tres" id="5_2qa88"]
+
+[resource]
+script = ExtResource("2_qxh4f")
+entries = Array[ExtResource("1_loqi6")]([ExtResource("2_2gc3c"), ExtResource("3_hgsor"), ExtResource("4_08nxe"), ExtResource("5_2qa88")])
+id = "default"
+metadata/_custom_type_script = "uid://dyr7434ivhnhf"

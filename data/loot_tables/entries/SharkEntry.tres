@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="LootEntry" format=3 uid="uid://byj2716cjpfaa"]
+
+[ext_resource type="Resource" uid="uid://bjqkwk7c5hdg8" path="res://data/items/fish/shark.tres" id="1_idfg1"]
+[ext_resource type="Script" uid="uid://dqh6hql80iexv" path="res://classes/loot/loot_entry.gd" id="2_tnkgr"]
+
+[resource]
+script = ExtResource("2_tnkgr")
+item = ExtResource("1_idfg1")
+weight = 2
+metadata/_custom_type_script = "uid://dqh6hql80iexv"

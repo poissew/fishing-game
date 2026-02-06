@@ -1,0 +1,9 @@
+[gd_scene format=3 uid="uid://cwa262ijcxba7"]
+
+[ext_resource type="Script" uid="uid://ca3pjcu8wenc2" path="res://autoload/tables_db.gd" id="1_0q3tr"]
+[ext_resource type="Script" uid="uid://dyr7434ivhnhf" path="res://classes/loot/loot_table.gd" id="2_s3wvl"]
+[ext_resource type="Resource" uid="uid://bc7v3xw61ud7e" path="res://data/loot_tables/default.tres" id="3_d0te2"]
+
+[node name="TablesDb" type="Node" unique_id=2038641900]
+script = ExtResource("1_0q3tr")
+tables = Array[ExtResource("2_s3wvl")]([ExtResource("3_d0te2")])

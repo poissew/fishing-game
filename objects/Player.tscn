@@ -1,4 +1,4 @@
-[gd_scene load_steps=7 format=3 uid="uid://divlt8ggdx0xy"]
+[gd_scene format=3 uid="uid://divlt8ggdx0xy"]
 
 [ext_resource type="Script" uid="uid://c46a21g7n5yi8" path="res://classes/player.gd" id="1_8ak8y"]
 [ext_resource type="Shader" uid="uid://bjf0e2tclptmu" path="res://shaders/3dpixel/edge_detection.gdshader" id="2_gndvh"]
@@ -6,11 +6,6 @@
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_gndvh"]
 radius = 0.3
 height = 1.78
-
-[sub_resource type="Environment" id="Environment_8ak8y"]
-background_mode = 1
-ambient_light_source = 2
-ambient_light_color = Color(1, 1, 1, 1)
 
 [sub_resource type="QuadMesh" id="QuadMesh_8ak8y"]
 flip_faces = true
@@ -21,29 +16,28 @@ render_priority = 0
 shader = ExtResource("2_gndvh")
 shader_parameter/lightIntensity = 1.25
 shader_parameter/lineAlpha = 0.7
-shader_parameter/useLighting = true
+shader_parameter/useLighting = false
 shader_parameter/lineHighlight = 0.2
 shader_parameter/lineShadow = 0.55
 
-[node name="Player" type="CharacterBody3D"]
+[node name="Player" type="CharacterBody3D" unique_id=926964297]
 script = ExtResource("1_8ak8y")
 
-[node name="hitbox" type="CollisionShape3D" parent="."]
+[node name="hitbox" type="CollisionShape3D" parent="." unique_id=2108073651]
 shape = SubResource("CapsuleShape3D_gndvh")
 
-[node name="head" type="Node3D" parent="."]
+[node name="head" type="Node3D" parent="." unique_id=852353815]
 
-[node name="Camera3D" type="Camera3D" parent="head"]
+[node name="Camera3D" type="Camera3D" parent="head" unique_id=1731975369]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.60854167, 0)
-environment = SubResource("Environment_8ak8y")
 current = true
 size = 7.278
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="head/Camera3D"]
+[node name="MeshInstance3D" type="MeshInstance3D" parent="head/Camera3D" unique_id=1792447464]
 extra_cull_margin = 16384.0
 mesh = SubResource("QuadMesh_8ak8y")
 surface_material_override/0 = SubResource("ShaderMaterial_6vqvp")
 
-[node name="CSGCylinder3D" type="CSGCylinder3D" parent="."]
+[node name="CSGCylinder3D" type="CSGCylinder3D" parent="." unique_id=1957668382]
 radius = 0.3
 height = 1.78
