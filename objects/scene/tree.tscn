@@ -10,12 +10,16 @@ height = 6.408
 
 [node name="trunk2" type="Sprite3D" parent="." unique_id=210746359]
 transform = Transform3D(-8.742278e-08, 0, -2, 0, 2, 0, 2, 0, -8.742278e-08, 0, 0, 0)
+cast_shadow = 0
+gi_mode = 0
 alpha_cut = 1
 texture_filter = 0
 texture = ExtResource("1_0qqbh")
 
 [node name="trunk1" type="Sprite3D" parent="." unique_id=205799599]
 transform = Transform3D(2, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0)
+cast_shadow = 0
+gi_mode = 0
 alpha_cut = 1
 texture_filter = 0
 texture = ExtResource("1_0qqbh")

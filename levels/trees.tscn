@@ -2,12 +2,44 @@
 
 [ext_resource type="Texture2D" uid="uid://cvuv7v5dttbbx" path="res://textures/text_grass.jpg" id="1_u0xm0"]
 [ext_resource type="PackedScene" uid="uid://d44a8b31gtht" path="res://objects/scene/tree.tscn" id="2_gh6mx"]
+[ext_resource type="Texture2D" uid="uid://cya3vax21tv5c" path="res://textures/67_sea water foam texture-seamless.jpg" id="2_hb4ym"]
+[ext_resource type="Texture2D" uid="uid://dl112o6rnygjl" path="res://textures/sky_20_2k.png" id="3_in6ns"]
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_gh6mx"]
+shading_mode = 0
+albedo_color = Color(0.66821647, 0.6682165, 0.66821647, 1)
 albedo_texture = ExtResource("1_u0xm0")
-albedo_texture_force_srgb = true
 uv1_scale = Vector3(0.9, 0.9, 0.9)
 uv1_triplanar = true
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_fpeya"]
+specular_mode = 2
+disable_ambient_light = true
+disable_fog = true
+disable_specular_occlusion = true
+albedo_texture = ExtResource("2_hb4ym")
+uv1_scale = Vector3(2.08, 2.08, 2.08)
+uv1_triplanar = true
+uv1_world_triplanar = true
+texture_filter = 0
+disable_receive_shadows = true
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_hb4ym"]
+size = Vector3(3.753, 0.198, 3.159)
+
+[sub_resource type="PanoramaSkyMaterial" id="PanoramaSkyMaterial_hb4ym"]
+panorama = ExtResource("3_in6ns")
+filter = false
+
+[sub_resource type="Sky" id="Sky_hb4ym"]
+sky_material = SubResource("PanoramaSkyMaterial_hb4ym")
+
+[sub_resource type="Environment" id="Environment_wi2ii"]
+background_mode = 2
+sky = SubResource("Sky_hb4ym")
+ambient_light_source = 1
+ambient_light_color = Color(0.7784455, 0.7784455, 0.7784455, 1)
+reflected_light_source = 1
 
 [node name="Trees" type="Node3D" unique_id=1273550201]
 
@@ -19,8 +51,34 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.1012926, -0.36596668, -1.9
 size = Vector3(7.5097656, 0.2680664, 7.995758)
 material = SubResource("StandardMaterial3D_gh6mx")
 
+[node name="waterlol" type="CSGBox3D" parent="CSGCombiner3D" unique_id=651100286]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.4348145, -0.42333984, 0.14419556)
+cast_shadow = 0
+gi_mode = 0
+size = Vector3(3.7529297, 0.15332031, 3.1586304)
+material = SubResource("StandardMaterial3D_fpeya")
+
+[node name="Area3D" type="Area3D" parent="CSGCombiner3D/waterlol" unique_id=1061583400 groups=["water"]]
+collision_layer = 2
+collision_mask = 2
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="CSGCombiner3D/waterlol/Area3D" unique_id=813204950]
+shape = SubResource("BoxShape3D_hb4ym")
+
 [node name="Tree" parent="." unique_id=192809811 instance=ExtResource("2_gh6mx")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.388, 2.111, -2.041)
 
 [node name="Tree2" parent="." unique_id=837769575 instance=ExtResource("2_gh6mx")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.5862293, 2.1446736, -3.7027087)
+
+[node name="env" type="WorldEnvironment" parent="." unique_id=431552610]
+environment = SubResource("Environment_wi2ii")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=2147130594]
+transform = Transform3D(1, 0, 0, 0, 0.27332127, 0.9619228, 0, -0.9619228, 0.27332127, 0, 16.554316, 0)
+light_energy = 0.649
+light_bake_mode = 1
+directional_shadow_mode = 0
+directional_shadow_fade_start = 0.0
+directional_shadow_max_distance = 0.0
+directional_shadow_pancake_size = 0.0

@@ -1,0 +1,33 @@
+[gd_scene format=3 uid="uid://bhfye0bothgi3"]
+
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_38vpl"]
+angle_min = -298.1
+angle_max = 253.40001
+direction = Vector3(0, 1, 0)
+spread = 67.987
+initial_velocity_max = 41.41
+scale_min = 715.29
+scale_max = 715.29
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_31t3w"]
+shading_mode = 0
+albedo_color = Color(0.34041488, 0.54132074, 0.9952815, 1)
+
+[sub_resource type="SphereMesh" id="SphereMesh_8d1qq"]
+material = SubResource("StandardMaterial3D_31t3w")
+radius = 0.001
+height = 0.001
+
+[sub_resource type="Skin" id="Skin_f8syx"]
+
+[node name="WaterSplash" type="GPUParticles3D" unique_id=1025704024]
+emitting = false
+amount = 34
+lifetime = 1.1
+one_shot = true
+speed_scale = 3.55
+explosiveness = 0.39
+randomness = 0.12
+process_material = SubResource("ParticleProcessMaterial_38vpl")
+draw_pass_1 = SubResource("SphereMesh_8d1qq")
+draw_skin = SubResource("Skin_f8syx")

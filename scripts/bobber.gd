@@ -22,6 +22,7 @@ enum BOBBER_STATE { ## état du bobber (ex: en l'air, dans l'eau etc...)
 	REELING ## Comportement quand on ramène la canne vers soi
 }
 
+@onready var splash_part:PackedScene = load("res://objects/particles/water_splash.tscn")
 @onready var ttf:Timer = $TimeToFish
 var current_state:BOBBER_STATE = BOBBER_STATE.IN_AIR
 @export var fishing_loot: LootTable
