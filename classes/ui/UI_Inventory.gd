@@ -133,7 +133,7 @@ func _draw_items() -> void:
 func _draw_held() -> void:
 	if _held_item == null:
 		return
-	var placement := _placement_cell()
+	var placement := _placement_for(_hovered_cell)
 	var draw_pos: Vector2
 	if placement == Vector2i(-1, -1):
 		draw_pos = _mouse_pos - Vector2(_grab_offset) * CELL_SIZE
@@ -172,7 +172,7 @@ func _input(event: InputEvent) -> void:
 			if event.pressed:
 				_try_pickup(cell)
 			elif _held_item != null:
-				_try_drop(cell)
+				_try_drop(_cell_at(mpos))
 		elif event.button_index == MOUSE_BUTTON_RIGHT and event.pressed:
 			if _held_item != null:
 				_rotate_held()
@@ -201,8 +201,8 @@ func _try_pickup(cell: Vector2i) -> void:
 	_show_preview(item)
 	queue_redraw()
 
-func _try_drop(cell: Vector2i) -> void:
-	var placement := _placement_cell()
+func _try_drop(hovered: Vector2i) -> void:
+	var placement := _placement_for(hovered)
 	if placement != Vector2i(-1, -1) and inventory.can_place(_held_item, placement):
 		inventory.place_item(_held_item, placement)
 		_held_item = null
@@ -213,14 +213,20 @@ func _try_drop(cell: Vector2i) -> void:
 
 func _cancel_drag() -> void:
 	_held_item.rotated = _origin_rot
-	inventory.place_item(_held_item, _origin_pos)
+	if not inventory.place_item(_held_item, _origin_pos):
+		# Fallback: force back to avoid losing the item
+		_held_item.position = _origin_pos
+		inventory.items.append(_held_item)
 	_held_item = null
 
 func _rotate_held() -> void:
 	if _held_item == null or not _held_item.data.rotatable:
 		return
+	# Capture old height BEFORE toggling — needed for the CW offset transform
+	var old_h := _held_item.get_footprint().y
 	_held_item.rotated = not _held_item.rotated
-	_grab_offset = Vector2i(_grab_offset.y, _held_item.get_footprint().y - 1 - _grab_offset.x)
+	# 90° CW: point (gx, gy) in (W × H) → (old_H - 1 - gy, gx) in (H × W)
+	_grab_offset = Vector2i(old_h - 1 - _grab_offset.y, _grab_offset.x)
 	queue_redraw()
 
 func _rotate_at(cell: Vector2i) -> void:
@@ -231,10 +237,10 @@ func _rotate_at(cell: Vector2i) -> void:
 		inventory.rotate_item(item)
 		queue_redraw()
 
-func _placement_cell() -> Vector2i:
-	if _hovered_cell == Vector2i(-1, -1):
+func _placement_for(hovered: Vector2i) -> Vector2i:
+	if hovered == Vector2i(-1, -1):
 		return Vector2i(-1, -1)
-	return _hovered_cell - _grab_offset
+	return hovered - _grab_offset
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
