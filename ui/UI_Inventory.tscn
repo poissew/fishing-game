@@ -19,7 +19,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(0, 0, 0, 0.75)
+color = Color(0, 0, 0, 0.6)
 
 [node name="ItemPreview" type="Control" parent="." unique_id=942029595]
 layout_mode = 0
@@ -31,10 +31,12 @@ offset_bottom = 128.0
 [node name="Name" type="Label" parent="ItemPreview" unique_id=1907272220]
 layout_mode = 0
 offset_right = 140.0
-offset_bottom = 16.0
+offset_bottom = 14.0
+theme_override_font_sizes/font_size = 8
 
 [node name="Stats" type="Label" parent="ItemPreview" unique_id=1938510966]
 layout_mode = 0
-offset_top = 20.0
+offset_top = 18.0
 offset_right = 140.0
 offset_bottom = 128.0
+theme_override_font_sizes/font_size = 7
