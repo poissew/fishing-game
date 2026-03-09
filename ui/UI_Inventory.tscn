@@ -3,16 +3,16 @@
 [ext_resource type="Script" uid="uid://bj80tqks5c4bp" path="res://classes/ui/UI_Inventory.gd" id="1_3j30o"]
 
 [node name="UI_Inventory" type="Control" unique_id=2080400559]
+visible = false
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-visible = false
 script = ExtResource("1_3j30o")
 
-[node name="Background" type="ColorRect" parent="."]
+[node name="Background" type="ColorRect" parent="." unique_id=1777367486]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -21,20 +21,20 @@ grow_horizontal = 2
 grow_vertical = 2
 color = Color(0, 0, 0, 0.75)
 
-[node name="ItemPreview" type="Control" parent="."]
+[node name="ItemPreview" type="Control" parent="." unique_id=942029595]
 layout_mode = 0
-offset_left = 172.0
-offset_top = 4.0
-offset_right = 360.0
-offset_bottom = 136.0
+offset_left = 0.0
+offset_top = 0.0
+offset_right = 140.0
+offset_bottom = 128.0
 
-[node name="Name" type="Label" parent="ItemPreview"]
+[node name="Name" type="Label" parent="ItemPreview" unique_id=1907272220]
 layout_mode = 0
-offset_right = 188.0
+offset_right = 140.0
 offset_bottom = 16.0
 
-[node name="Stats" type="Label" parent="ItemPreview"]
+[node name="Stats" type="Label" parent="ItemPreview" unique_id=1938510966]
 layout_mode = 0
 offset_top = 20.0
-offset_right = 188.0
-offset_bottom = 132.0
+offset_right = 140.0
+offset_bottom = 128.0

@@ -4,7 +4,6 @@
 
 [resource]
 script = ExtResource("1_5jji5")
-weight = 18
 id = 4
 name = "Trout"
 size = Vector2i(1, 2)

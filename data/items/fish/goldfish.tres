@@ -8,7 +8,6 @@ min_size = 0.2
 max_size = 0.8
 base_value = 3
 rarity = 2
-weight = 12
 id = 6
 name = "Goldfish"
 size = Vector2i(1, 1)

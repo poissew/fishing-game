@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="RodData" load_steps=3 format=3 uid="uid://dkf0pnftj7l2c"]
+[gd_resource type="Resource" script_class="RodData" format=3 uid="uid://dkf0pnftj7l2c"]
 
 [ext_resource type="Script" uid="uid://b1ohinxs3jeo1" path="res://classes/rod_data.gd" id="1_qep2k"]
 [ext_resource type="Texture2D" uid="uid://bhpibbpddih7u" path="res://icon.svg" id="1_qpoi0"]

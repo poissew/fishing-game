@@ -30,6 +30,8 @@ func _input(event: InputEvent) -> void:
 func _ready() -> void:
 	var inv = load("res://ui/UI_Inventory.tscn")
 	inventory_ui = inv.instantiate()
+	inventory.height = 8
+	inventory.width = 10
 	inventory_ui.bind_inventory(inventory)
 	inventory_ui.item_requested_equip.connect(_on_equip_requested)
 	add_child(inventory_ui)
@@ -37,8 +39,6 @@ func _ready() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	var _inst = RodInstance.new()
 	_inst = _inst.create_rod_instance(Itemdb.get_item(100))
-	inventory.height = 8
-	inventory.width = 10
 	inventory.place_item(_inst, Vector2i(0,0))
 	_equip_rod(_inst)
 
