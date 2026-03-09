@@ -6,7 +6,7 @@
 [ext_resource type="Resource" uid="uid://byj2716cjpfaa" path="res://data/loot_tables/entries/SharkEntry.tres" id="3_hgsor"]
 [ext_resource type="Resource" uid="uid://bj1b8proyllky" path="res://data/loot_tables/entries/TroutEntry.tres" id="4_08nxe"]
 [ext_resource type="Resource" uid="uid://ckb7xnscg0qg3" path="res://data/loot_tables/entries/CatfishEntry.tres" id="5_2qa88"]
-[ext_resource type="Resource" uid="uid://cfeq1prw11b24" path="res://data/loot_tables/entries/BassEntry.tres" id="6_bass4"]
+[ext_resource type="Resource" path="res://data/loot_tables/entries/BassEntry.tres" id="6_bass4"]
 
 [resource]
 script = ExtResource("2_qxh4f")

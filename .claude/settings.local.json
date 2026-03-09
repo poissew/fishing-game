@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(\"C:/Windows/System32/OpenSSH/ssh-add.exe\":*)"
+    ]
+  }
+}

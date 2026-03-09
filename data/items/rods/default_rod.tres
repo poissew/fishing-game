@@ -11,5 +11,5 @@ reel_speed = 1.0
 id = 100
 name = "Wooden Rod"
 icon = ExtResource("1_qpoi0")
-size = Vector2i(1, 2)
+size = Vector2i(1, 4)
 metadata/_custom_type_script = "uid://b1ohinxs3jeo1"

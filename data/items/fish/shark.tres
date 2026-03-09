@@ -11,4 +11,5 @@ rarity = 4
 weight = 2
 id = 7
 name = "Shark"
+size = Vector2i(2, 3)
 metadata/_custom_type_script = "uid://b3tnjarefmysf"

@@ -11,4 +11,5 @@ rarity = 2
 weight = 12
 id = 6
 name = "Goldfish"
+size = Vector2i(1, 1)
 metadata/_custom_type_script = "uid://b3tnjarefmysf"

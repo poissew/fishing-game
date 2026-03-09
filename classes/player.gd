@@ -31,14 +31,14 @@ func _ready() -> void:
 	var inv = load("res://ui/UI_Inventory.tscn")
 	inventory_ui = inv.instantiate()
 	inventory_ui.bind_inventory(inventory)
-	inventory_ui.item_requested_equip.connect(equip_item)
+	inventory_ui.item_requested_equip.connect(_on_equip_requested)
 	add_child(inventory_ui)
 
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	var _inst = RodInstance.new()
 	_inst = _inst.create_rod_instance(Itemdb.get_item(100))
-	inventory.height = 16
-	inventory.width = 20
+	inventory.height = 8
+	inventory.width = 10
 	inventory.place_item(_inst, Vector2i(0,0))
 	_equip_rod(_inst)
 
@@ -75,6 +75,10 @@ func _toggle_inventory() -> void:
 	else:
 		inventory_ui.open()
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
+func _on_equip_requested(item: ItemInstance) -> void:
+	if equip_item(item):
+		_toggle_inventory()
 
 func equip_item(item: ItemInstance) -> bool:
 	if item is RodInstance:
@@ -135,4 +139,4 @@ func _on_bobber_fish_caught(fish_data: Item, amount: int) -> void:
 			_on_inventory_full_when_fishing(fish_instance)
 
 func _on_inventory_full_when_fishing(fish_instance: FishInstance) -> void:
-	print("Inventaire plein : poisson relâché")
+	print("Inventaire plein : poisson relâché : ", fish_instance)
