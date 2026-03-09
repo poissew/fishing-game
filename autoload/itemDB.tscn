@@ -9,7 +9,8 @@
 [ext_resource type="Resource" uid="uid://b70u8aoi8cy88" path="res://data/items/fish/goldfish.tres" id="7_im31p"]
 [ext_resource type="Resource" uid="uid://bjqkwk7c5hdg8" path="res://data/items/fish/shark.tres" id="8_16d78"]
 [ext_resource type="Resource" uid="uid://d2bfpkgsak1v0" path="res://data/items/fish/trout.tres" id="9_nqwoa"]
+[ext_resource type="Resource" uid="uid://b51kb85a3n5uy" path="res://data/items/fish/bass.tres" id="10_bass5"]
 
 [node name="ItemDb" type="Node" unique_id=73838295]
 script = ExtResource("1_d7wpg")
-item_list = Array[ExtResource("2_305c5")]([ExtResource("3_u8f0o"), ExtResource("4_b2ouy"), ExtResource("5_xsm0o"), ExtResource("6_vuvht"), ExtResource("7_im31p"), ExtResource("8_16d78"), ExtResource("9_nqwoa")])
+item_list = Array[ExtResource("2_305c5")]([ExtResource("3_u8f0o"), ExtResource("4_b2ouy"), ExtResource("5_xsm0o"), ExtResource("6_vuvht"), ExtResource("7_im31p"), ExtResource("8_16d78"), ExtResource("9_nqwoa"), ExtResource("10_bass5")])

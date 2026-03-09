@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="FishData" format=3 uid="uid://b51kb85a3n5uy"]
+
+[ext_resource type="Script" uid="uid://b3tnjarefmysf" path="res://classes/fish_data.gd" id="1_bass1"]
+
+[resource]
+script = ExtResource("1_bass1")
+min_size = 0.3
+max_size = 1.5
+base_value = 5
+rarity = 1
+weight = 15
+id = 8
+name = "Bass"
+metadata/_custom_type_script = "uid://b3tnjarefmysf"
