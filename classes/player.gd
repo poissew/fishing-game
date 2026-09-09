@@ -4,7 +4,13 @@ extends CharacterBody3D
 var inventory:Inventory = Inventory.new()
 var inventory_ui:UIInventory = null
 
-var equipped_rod: RodInstance = null
+var hands:Hands = Hands.new()
+
+## The rod currently held in a hand, if any. Hands are the source of truth.
+var equipped_rod: RodInstance:
+	get:
+		return hands.get_rod()
+
 var bobber: PackedScene = load("res://objects/Bobber.tscn")
 
 const SPEED = 5.0
@@ -14,6 +20,7 @@ const JUMP_VELOCITY = 4.5
 
 @onready var head:Node3D = $head
 @onready var camera:Camera3D = $head/Camera3D
+@onready var hands_viewmodel:HandsViewmodel = $head/Camera3D/HandsViewmodel
 
 @onready var player_luck:int = 0
 
@@ -36,11 +43,13 @@ func _ready() -> void:
 	inventory_ui.item_requested_equip.connect(_on_equip_requested)
 	add_child(inventory_ui)
 
+	hands_viewmodel.bind_hands(hands, camera)
+	inventory_ui.bind_hands(hands, hands_viewmodel)
+
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	var _inst = RodInstance.new()
 	_inst = _inst.create_rod_instance(Itemdb.get_item(100))
-	inventory.place_item(_inst, Vector2i(0,0))
-	_equip_rod(_inst)
+	equip_item(_inst, Hands.Slot.RIGHT)
 
 func _unhandled_input(event: InputEvent) -> void:
 	if inventory_ui.visible:
@@ -80,29 +89,50 @@ func _on_equip_requested(item: ItemInstance) -> void:
 	if equip_item(item):
 		_toggle_inventory()
 
-func equip_item(item: ItemInstance) -> bool:
-	if item is RodInstance:
-		return _equip_rod(item)
-	return false
+## Move `item` into a hand. `slot` < 0 picks a free hand (right hand otherwise).
+## Whatever the hand was holding goes back to the inventory, or is swapped when
+## the item itself came from the other hand.
+func equip_item(item: ItemInstance, slot: int = -1) -> bool:
+	if item == null:
+		return false
 
-func _equip_rod(rod: RodInstance) -> bool:
-	if equipped_rod != null:
-		if not inventory.place_item(equipped_rod, equipped_rod.position):
-			return false
-		equipped_rod = null
+	if slot < 0:
+		slot = hands.first_free_slot()
+		if slot < 0:
+			slot = Hands.Slot.RIGHT
 
-	inventory.items.erase(rod)
-	equipped_rod = rod
+	var from := hands.slot_of(item)
+	if from == slot:
+		return true
+
+	var displaced := hands.get_item(slot)
+	if from >= 0:
+		hands.set_item(from, displaced)
+		hands.set_item(slot, item)
+		return true
+
+	if displaced != null and not inventory.add_or_place(displaced):
+		return false
+
+	inventory.items.erase(item)
+	hands.set_item(slot, item)
+	return true
+
+## Put whatever is in `slot` back into the inventory.
+func unequip_slot(slot: int) -> bool:
+	var item := hands.get_item(slot)
+	if item == null:
+		return false
+	if not inventory.add_or_place(item):
+		return false
+	hands.clear(slot)
 	return true
 
 func unequip_rod() -> bool:
-	if equipped_rod == null:
+	var slot := hands.slot_of_rod()
+	if slot < 0:
 		return false
-
-	var placed := inventory.place_item(equipped_rod, Vector2i(0, 0))
-	if placed:
-		equipped_rod = null
-	return placed
+	return unequip_slot(slot)
 
 func can_fish() -> bool:
 	return equipped_rod != null and not equipped_rod.is_broken()

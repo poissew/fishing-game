@@ -57,6 +57,18 @@ ItemInstance (Resource)   — runtime placement: data ref + grid position + rota
 - `UIInventory` (`classes/ui/UI_Inventory.gd`, Control) — bound to an `Inventory` via `bind_inventory()`; emits `item_requested_equip`
 - `InventorySlot` (`classes/ui/InventorySlot.gd`, Panel) — individual cell, draws item icon
 
+### Hands
+
+- `Hands` (Resource) — two slots (`Hands.Slot.LEFT` / `RIGHT`), each holding one `ItemInstance` or null; emits `changed`
+- `HandsViewmodel` (`classes/hands_viewmodel.gd`, Node3D) — in-world first-person viewmodel under `head/Camera3D` in `Player.tscn`, with `LeftHand` / `RightHand` anchor Node3Ds. There is no hands HUD
+- Every held item is a `Sprite3D` of its `Item.icon` (nearest filtering, `ALPHA_CUT_DISCARD` so it writes depth for the edge shader), falling back to `icon.svg`. New item types need no viewmodel code — just an icon
+- A held fish's world height comes from `FishInstance.size` over a `sqrt` curve clamped to `FISH_MIN_H`..`FISH_MAX_H`, so a big catch is visibly big without filling the view; everything else uses `ITEM_BASE_H`
+- Pose the hands by moving the anchor Node3Ds in the editor — nothing in the script hardcodes their placement
+- `get_screen_rect()` / `slot_at()` unproject an anchor through the camera so `UIInventory` can still drag items into and out of a hand; the zones are only drawn mid-drag
+- Hands are the source of truth for what is equipped: `Player.equipped_rod` is a read-only property backed by `hands.get_rod()`
+- Use `Player.equip_item(item, slot)` / `unequip_slot(slot)` to move items between hands and inventory
+- While the inventory is open, items can be dragged between the grid and the hand slots; `E` on a held item equips it
+
 ### Input map
 
 | Action | Key/Button |

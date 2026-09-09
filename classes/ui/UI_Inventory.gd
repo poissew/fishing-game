@@ -24,11 +24,17 @@ const C_ITEM_HOVER   := Color(0.22, 0.60, 0.24, 0.92)
 const C_ITEM_BORDER  := Color(0.28, 0.68, 0.30, 1.00)
 const C_HELD_OK      := Color(0.30, 0.70, 0.32, 0.88)
 const C_HELD_BAD     := Color(0.72, 0.16, 0.14, 0.88)
+# Hand drop zones — projected from the 3D viewmodel, shown only mid-drag
+const C_ZONE_FILL     := Color(0.30, 0.70, 0.32, 0.22)
+const C_ZONE_FILL_DIM := Color(0.05, 0.08, 0.05, 0.35)
+const HAND_LABELS     := ["L", "R"]
 
 @onready var _name_label:  Label = $ItemPreview/Name
 @onready var _stats_label: Label = $ItemPreview/Stats
 
 var inventory:     Inventory
+var hands:         Hands          = null
+var _hands_view:   HandsViewmodel = null
 var _default_icon: Texture2D = preload("res://icon.svg")
 
 # Layout – computed in _ready()
@@ -40,6 +46,8 @@ var _held_item:   ItemInstance = null
 var _grab_offset: Vector2i    = Vector2i.ZERO
 var _origin_pos:  Vector2i    = Vector2i.ZERO
 var _origin_rot:  bool        = false
+# Hand slot the drag started from, or -1 when it came from the grid
+var _held_from_hand: int      = -1
 
 # Mouse
 var _mouse_pos:    Vector2  = Vector2.ZERO
@@ -49,6 +57,10 @@ var _hovered_cell: Vector2i = Vector2i(-1, -1)
 
 func bind_inventory(inv: Inventory) -> void:
 	inventory = inv
+
+func bind_hands(h: Hands, viewmodel: HandsViewmodel) -> void:
+	hands = h
+	_hands_view = viewmodel
 
 func _ready() -> void:
 	var grid_px  := Vector2(inventory.width, inventory.height) * CELL_SIZE
@@ -83,6 +95,7 @@ func _draw() -> void:
 	_draw_panel()
 	_draw_grid()
 	_draw_items()
+	_draw_hand_zones()
 	_draw_held()
 
 func _draw_panel() -> void:
@@ -100,7 +113,7 @@ func _draw_panel() -> void:
 		HORIZONTAL_ALIGNMENT_LEFT, -1, 8, C_TITLE_TEXT)
 	# Hint text right-aligned
 	draw_string(font, r.position + Vector2(r.size.x - PAD, TITLE_H - 2),
-		"RMB: rotate  |  E: equip",
+		"RMB: rotate  |  E / drag to hands: equip",
 		HORIZONTAL_ALIGNMENT_RIGHT, -1, 6, C_SEP)
 	# Separator under title
 	draw_line(Vector2(r.position.x, r.position.y + TITLE_H),
@@ -140,7 +153,25 @@ func _draw_held() -> void:
 	else:
 		draw_pos = _grid_offset + Vector2(placement) * CELL_SIZE
 	var ok := placement != Vector2i(-1, -1) and inventory.can_place(_held_item, placement)
+	if not ok:
+		ok = _can_drop_in_hand(_hand_slot_at_mouse())
 	_draw_item(_held_item, draw_pos, C_HELD_OK if ok else C_HELD_BAD)
+
+## Outline where the 3D hands sit on screen, so a dragged item has a target.
+func _draw_hand_zones() -> void:
+	if _held_item == null or _hands_view == null:
+		return
+	var hovered := _hand_slot_at_mouse()
+	var font := ThemeDB.fallback_font
+	for slot in Hands.SLOT_COUNT:
+		var r := _hands_view.get_screen_rect(slot)
+		if r.size.x <= 0.0:
+			continue
+		var on := slot == hovered
+		draw_rect(r, C_ZONE_FILL if on else C_ZONE_FILL_DIM)
+		draw_rect(r, C_HELD_OK if on else C_SEP, false)
+		draw_string(font, r.position + Vector2(3, 9), HAND_LABELS[slot],
+			HORIZONTAL_ALIGNMENT_LEFT, -1, 7, C_SEP)
 
 func _draw_item(item: ItemInstance, pos: Vector2, color: Color) -> void:
 	var fp   := Vector2(item.get_footprint()) * CELL_SIZE
@@ -163,6 +194,13 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion:
 		_mouse_pos    = mpos
 		_hovered_cell = _cell_at(mpos)
+		var hand_slot := _hand_slot_at_mouse()
+		if _held_item == null:
+			var hand_item: ItemInstance = hands.get_item(hand_slot) if hands != null else null
+			if hand_item != null:
+				_show_preview(hand_item)
+			else:
+				_clear_preview()
 		queue_redraw()
 		return
 
@@ -181,43 +219,109 @@ func _input(event: InputEvent) -> void:
 		return
 
 	if event.is_action_pressed("interact") and _held_item != null:
-		emit_signal("item_requested_equip", _held_item)
-		_held_item = null
-		_clear_preview()
+		_equip_held()
 
 # ── Drag helpers ──────────────────────────────────────────────────────────────
 
 func _try_pickup(cell: Vector2i) -> void:
 	if cell == Vector2i(-1, -1):
+		_try_pickup_hand()
 		return
 	var item := _item_at(cell)
 	if item == null:
 		return
-	_origin_pos  = item.position
-	_origin_rot  = item.rotated
-	_grab_offset = cell - item.position
+	_origin_pos     = item.position
+	_origin_rot     = item.rotated
+	_grab_offset    = cell - item.position
+	_held_from_hand = -1
 	inventory.items.erase(item)
 	_held_item = item
 	_show_preview(item)
 	queue_redraw()
 
+func _try_pickup_hand() -> void:
+	var slot := _hand_slot_at_mouse()
+	var item: ItemInstance = hands.get_item(slot) if hands != null else null
+	if item == null:
+		return
+	_origin_pos     = item.position
+	_origin_rot     = item.rotated
+	_grab_offset    = Vector2i.ZERO
+	_held_from_hand = slot
+	hands.clear(slot)
+	_held_item = item
+	_show_preview(item)
+	queue_redraw()
+
 func _try_drop(hovered: Vector2i) -> void:
+	var slot := _hand_slot_at_mouse()
+	if slot >= 0:
+		if _drop_in_hand(slot):
+			_release_held()
+		else:
+			_cancel_drag()
+		queue_redraw()
+		return
+
 	var placement := _placement_for(hovered)
 	if placement != Vector2i(-1, -1) and inventory.can_place(_held_item, placement):
 		inventory.place_item(_held_item, placement)
-		_held_item = null
-		_clear_preview()
+		_release_held()
 	else:
 		_cancel_drag()
 	queue_redraw()
 
+## Put the held item in `slot`. What was there is swapped back into the hand the
+## drag came from, or pushed into the inventory. Fails if neither is possible.
+func _drop_in_hand(slot: int) -> bool:
+	if hands == null:
+		return false
+	var displaced := hands.get_item(slot)
+	if displaced != null:
+		if _held_from_hand >= 0:
+			hands.set_item(_held_from_hand, displaced)
+		elif not inventory.add_or_place(displaced):
+			return false
+	# Hands have no orientation — an item put down in one keeps its own.
+	_held_item.rotated = _origin_rot
+	hands.set_item(slot, _held_item)
+	return true
+
+func _release_held() -> void:
+	_held_item      = null
+	_held_from_hand = -1
+	_clear_preview()
+
 func _cancel_drag() -> void:
 	_held_item.rotated = _origin_rot
-	if not inventory.place_item(_held_item, _origin_pos):
+	if _held_from_hand >= 0:
+		hands.set_item(_held_from_hand, _held_item)
+	elif not inventory.place_item(_held_item, _origin_pos):
 		# Fallback: force back to avoid losing the item
 		_held_item.position = _origin_pos
 		inventory.items.append(_held_item)
-	_held_item = null
+	_held_item      = null
+	_held_from_hand = -1
+
+## Hand the dragged item to the player. Clearing the drag first matters: the
+## listener may close the inventory, which would otherwise cancel the drag and
+## duplicate the item.
+func _equip_held() -> void:
+	var item := _held_item
+	var from := _held_from_hand
+	_release_held()
+	item_requested_equip.emit(item)
+	if hands != null and hands.slot_of(item) >= 0:
+		return
+	if inventory.items.has(item):
+		return
+	# Equip refused it — put it back where the drag started.
+	if from >= 0 and hands != null:
+		hands.set_item(from, item)
+	else:
+		item.rotated = _origin_rot
+		if not inventory.place_item(item, _origin_pos):
+			inventory.add_or_place(item)
 
 func _rotate_held() -> void:
 	if _held_item == null or not _held_item.data.rotatable:
@@ -243,6 +347,18 @@ func _placement_for(hovered: Vector2i) -> Vector2i:
 	return hovered - _grab_offset
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
+## Whether dropping the held item in `slot` would succeed — mirrors _drop_in_hand().
+func _can_drop_in_hand(slot: int) -> bool:
+	if hands == null or slot < 0 or _held_item == null:
+		return false
+	var displaced := hands.get_item(slot)
+	return displaced == null or _held_from_hand >= 0 or inventory.has_space_for(displaced)
+
+func _hand_slot_at_mouse() -> int:
+	if _hands_view == null or hands == null:
+		return -1
+	return _hands_view.slot_at(get_local_mouse_position())
 
 func _cell_at(pos: Vector2) -> Vector2i:
 	var rel := pos - _grid_offset
