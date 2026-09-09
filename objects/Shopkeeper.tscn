@@ -1,0 +1,50 @@
+[gd_scene load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://classes/shopkeeper.gd" id="1_shopk"]
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_body"]
+radius = 0.3
+height = 1.6
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_coat"]
+shading_mode = 0
+albedo_color = Color(0.36, 0.24, 0.5, 1)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_skin"]
+shading_mode = 0
+albedo_color = Color(0.85, 0.68, 0.5, 1)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_stall"]
+shading_mode = 0
+albedo_color = Color(0.45, 0.3, 0.16, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_torso"]
+size = Vector3(0.55, 1.05, 0.35)
+
+[sub_resource type="BoxMesh" id="BoxMesh_head"]
+size = Vector3(0.34, 0.34, 0.34)
+
+[sub_resource type="BoxMesh" id="BoxMesh_stall"]
+size = Vector3(1.6, 0.12, 0.7)
+
+[node name="Shopkeeper" type="StaticBody3D"]
+script = ExtResource("1_shopk")
+
+[node name="Collision" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, 0)
+shape = SubResource("CapsuleShape3D_body")
+
+[node name="Torso" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
+mesh = SubResource("BoxMesh_torso")
+surface_material_override/0 = SubResource("StandardMaterial3D_coat")
+
+[node name="Head" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.6, 0)
+mesh = SubResource("BoxMesh_head")
+surface_material_override/0 = SubResource("StandardMaterial3D_skin")
+
+[node name="Stall" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.95, -0.55)
+mesh = SubResource("BoxMesh_stall")
+surface_material_override/0 = SubResource("StandardMaterial3D_stall")
