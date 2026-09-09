@@ -5,17 +5,17 @@ extends Node3D
 ## the HUD, parented to the camera so it rides along with the view and takes the
 ## scene's lighting and the pixel/edge post-process.
 ##
-## Fish are held as Sprite3Ds of their icon, sized by their real caught length.
-## Other items use their own 3D scene.
+## Every held item is a Sprite3D of its icon. Fish are additionally sized by
+## their real caught length; anything else gets a fixed height.
 ##
 ## The LeftHand / RightHand anchors are plain Node3Ds in Player.tscn — move or
 ## rotate them in the editor to pose the hands.
 
-const ROD_SCENE: PackedScene = preload("res://objects/Rod.tscn")
 const DEFAULT_ICON: Texture2D = preload("res://icon.svg")
 
-# Held-fish sprite height, in world units. A 1.0-length fish gets FISH_BASE_H.
-const FISH_BASE_H := 0.22
+# Held sprite height, in world units
+const ITEM_BASE_H := 0.30  # anything that is not a fish
+const FISH_BASE_H := 0.22  # a fish of length 1.0
 const FISH_MIN_H  := 0.09
 const FISH_MAX_H  := 0.51
 
@@ -62,32 +62,27 @@ func _rebuild_slot(slot: int) -> void:
 		anchor.add_child(visual)
 
 func _make_visual(item: ItemInstance) -> Node3D:
-	if item is FishInstance:
-		return _make_fish_visual(item as FishInstance)
-	if item is RodInstance:
-		var node := ROD_SCENE.instantiate() as Node3D
-		var rod  := node as Rod
-		if rod != null:
-			rod._update_rod(item as RodInstance)
-		return node
-	return null
-
-func _make_fish_visual(fish: FishInstance) -> Node3D:
+	if item == null:
+		return null
 	var sprite := Sprite3D.new()
-	sprite.texture = fish.data.icon if fish.data.icon else DEFAULT_ICON
+	sprite.texture = item.data.icon if item.data.icon else DEFAULT_ICON
 	sprite.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
 	# Discard rather than blend, so the sprite writes depth and the edge/pixel
 	# post-process treats it like the rest of the scene
 	sprite.alpha_cut = SpriteBase3D.ALPHA_CUT_DISCARD
 	var tex_h := sprite.texture.get_height()
 	if tex_h > 0:
-		sprite.pixel_size = _fish_height(fish) / float(tex_h)
+		sprite.pixel_size = _held_height(item) / float(tex_h)
 	return sprite
 
-## World height for a held fish. The square root keeps a 9.8m shark from being
-## 49x a 0.2m sardine, and the clamp keeps both extremes on screen; ordering
-## between catches is preserved throughout.
-func _fish_height(fish: FishInstance) -> float:
+## World height for a held item. Fish scale with their real caught length: the
+## square root keeps a 9.8m shark from being 49x a 0.2m sardine, and the clamp
+## keeps both extremes on screen, with ordering preserved throughout. Everything
+## else is a fixed height until it has a reason not to be.
+func _held_height(item: ItemInstance) -> float:
+	if not (item is FishInstance):
+		return ITEM_BASE_H
+	var fish := item as FishInstance
 	if fish.size <= 0.0:
 		return FISH_BASE_H
 	return clampf(FISH_BASE_H * sqrt(fish.size), FISH_MIN_H, FISH_MAX_H)
