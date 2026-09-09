@@ -3,6 +3,7 @@
 [ext_resource type="Script" uid="uid://c46a21g7n5yi8" path="res://classes/player.gd" id="1_8ak8y"]
 [ext_resource type="Texture2D" uid="uid://dl112o6rnygjl" path="res://textures/sky_20_2k.png" id="2_6vqvp"]
 [ext_resource type="Shader" uid="uid://bjf0e2tclptmu" path="res://shaders/3dpixel/edge_detection.gdshader" id="2_gndvh"]
+[ext_resource type="Script" uid="uid://cv1ewm0d3lh4n" path="res://classes/hands_viewmodel.gd" id="3_hvm0d"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_gndvh"]
 radius = 0.3
@@ -53,6 +54,15 @@ size = 7.278
 extra_cull_margin = 16384.0
 mesh = SubResource("QuadMesh_8ak8y")
 surface_material_override/0 = SubResource("ShaderMaterial_6vqvp")
+
+[node name="HandsViewmodel" type="Node3D" parent="head/Camera3D"]
+script = ExtResource("3_hvm0d")
+
+[node name="LeftHand" type="Node3D" parent="head/Camera3D/HandsViewmodel"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.55, -0.32, -0.6)
+
+[node name="RightHand" type="Node3D" parent="head/Camera3D/HandsViewmodel"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.55, -0.32, -0.6)
 
 [node name="CSGCylinder3D" type="CSGCylinder3D" parent="." unique_id=1957668382]
 radius = 0.3

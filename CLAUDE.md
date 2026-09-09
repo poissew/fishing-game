@@ -60,9 +60,10 @@ ItemInstance (Resource)   — runtime placement: data ref + grid position + rota
 ### Hands
 
 - `Hands` (Resource) — two slots (`Hands.Slot.LEFT` / `RIGHT`), each holding one `ItemInstance` or null; emits `changed`
-- `UIHands` (`classes/ui/UI_Hands.gd`, Control) — pure view, bound via `bind_hands()`; renders each hand as a `Sprite2D` (`LeftHand` / `RightHand`) at the bottom screen corners. There is no HUD panel
-- Fish sprites are scaled by their real `FishInstance.size` (`sqrt` curve between `MIN_H` and `MAX_H`), so a shark visibly dwarfs a sardine; other items draw at `BASE_H`
-- The sprites double as drag targets: `slot_at()` hit-tests them, and `set_drop_hint()` outlines the zones while the inventory has an item in hand
+- `HandsViewmodel` (`classes/hands_viewmodel.gd`, Node3D) — in-world first-person viewmodel under `head/Camera3D` in `Player.tscn`, with `LeftHand` / `RightHand` anchor Node3Ds. There is no hands HUD
+- It instantiates the item's real 3D model: `FishData.mesh` for fish, `objects/Rod.tscn` for rods. Fish are scaled by `FishInstance.size * MODEL_SCALE`, the same convention as `Fish._apply_random_scale()`, so a big catch is visibly big
+- Pose the hands by moving the anchor Node3Ds in the editor — nothing in the script hardcodes their placement
+- `get_screen_rect()` / `slot_at()` unproject an anchor through the camera so `UIInventory` can still drag items into and out of a hand; the zones are only drawn mid-drag
 - Hands are the source of truth for what is equipped: `Player.equipped_rod` is a read-only property backed by `hands.get_rod()`
 - Use `Player.equip_item(item, slot)` / `unequip_slot(slot)` to move items between hands and inventory
 - While the inventory is open, items can be dragged between the grid and the hand slots; `E` on a held item equips it

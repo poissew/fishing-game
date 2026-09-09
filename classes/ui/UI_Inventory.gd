@@ -24,13 +24,17 @@ const C_ITEM_HOVER   := Color(0.22, 0.60, 0.24, 0.92)
 const C_ITEM_BORDER  := Color(0.28, 0.68, 0.30, 1.00)
 const C_HELD_OK      := Color(0.30, 0.70, 0.32, 0.88)
 const C_HELD_BAD     := Color(0.72, 0.16, 0.14, 0.88)
+# Hand drop zones — projected from the 3D viewmodel, shown only mid-drag
+const C_ZONE_FILL     := Color(0.30, 0.70, 0.32, 0.22)
+const C_ZONE_FILL_DIM := Color(0.05, 0.08, 0.05, 0.35)
+const HAND_LABELS     := ["L", "R"]
 
 @onready var _name_label:  Label = $ItemPreview/Name
 @onready var _stats_label: Label = $ItemPreview/Stats
 
 var inventory:     Inventory
-var hands:         Hands   = null
-var _hands_ui:     UIHands = null
+var hands:         Hands          = null
+var _hands_view:   HandsViewmodel = null
 var _default_icon: Texture2D = preload("res://icon.svg")
 
 # Layout – computed in _ready()
@@ -54,9 +58,9 @@ var _hovered_cell: Vector2i = Vector2i(-1, -1)
 func bind_inventory(inv: Inventory) -> void:
 	inventory = inv
 
-func bind_hands(h: Hands, ui: UIHands) -> void:
+func bind_hands(h: Hands, viewmodel: HandsViewmodel) -> void:
 	hands = h
-	_hands_ui = ui
+	_hands_view = viewmodel
 
 func _ready() -> void:
 	var grid_px  := Vector2(inventory.width, inventory.height) * CELL_SIZE
@@ -81,7 +85,6 @@ func close() -> void:
 	if _held_item != null:
 		_cancel_drag()
 	visible = false
-	_update_drop_hint()
 	_clear_preview()
 
 # ── Drawing ───────────────────────────────────────────────────────────────────
@@ -92,6 +95,7 @@ func _draw() -> void:
 	_draw_panel()
 	_draw_grid()
 	_draw_items()
+	_draw_hand_zones()
 	_draw_held()
 
 func _draw_panel() -> void:
@@ -153,6 +157,22 @@ func _draw_held() -> void:
 		ok = _can_drop_in_hand(_hand_slot_at_mouse())
 	_draw_item(_held_item, draw_pos, C_HELD_OK if ok else C_HELD_BAD)
 
+## Outline where the 3D hands sit on screen, so a dragged item has a target.
+func _draw_hand_zones() -> void:
+	if _held_item == null or _hands_view == null:
+		return
+	var hovered := _hand_slot_at_mouse()
+	var font := ThemeDB.fallback_font
+	for slot in Hands.SLOT_COUNT:
+		var r := _hands_view.get_screen_rect(slot)
+		if r.size.x <= 0.0:
+			continue
+		var on := slot == hovered
+		draw_rect(r, C_ZONE_FILL if on else C_ZONE_FILL_DIM)
+		draw_rect(r, C_HELD_OK if on else C_SEP, false)
+		draw_string(font, r.position + Vector2(3, 9), HAND_LABELS[slot],
+			HORIZONTAL_ALIGNMENT_LEFT, -1, 7, C_SEP)
+
 func _draw_item(item: ItemInstance, pos: Vector2, color: Color) -> void:
 	var fp   := Vector2(item.get_footprint()) * CELL_SIZE
 	var rect := Rect2(pos, fp)
@@ -175,7 +195,6 @@ func _input(event: InputEvent) -> void:
 		_mouse_pos    = mpos
 		_hovered_cell = _cell_at(mpos)
 		var hand_slot := _hand_slot_at_mouse()
-		_update_drop_hint()
 		if _held_item == null:
 			var hand_item: ItemInstance = hands.get_item(hand_slot) if hands != null else null
 			if hand_item != null:
@@ -218,7 +237,6 @@ func _try_pickup(cell: Vector2i) -> void:
 	inventory.items.erase(item)
 	_held_item = item
 	_show_preview(item)
-	_update_drop_hint()
 	queue_redraw()
 
 func _try_pickup_hand() -> void:
@@ -233,7 +251,6 @@ func _try_pickup_hand() -> void:
 	hands.clear(slot)
 	_held_item = item
 	_show_preview(item)
-	_update_drop_hint()
 	queue_redraw()
 
 func _try_drop(hovered: Vector2i) -> void:
@@ -274,7 +291,6 @@ func _release_held() -> void:
 	_held_item      = null
 	_held_from_hand = -1
 	_clear_preview()
-	_update_drop_hint()
 
 func _cancel_drag() -> void:
 	_held_item.rotated = _origin_rot
@@ -286,7 +302,6 @@ func _cancel_drag() -> void:
 		inventory.items.append(_held_item)
 	_held_item      = null
 	_held_from_hand = -1
-	_update_drop_hint()
 
 ## Hand the dragged item to the player. Clearing the drag first matters: the
 ## listener may close the inventory, which would otherwise cancel the drag and
@@ -341,14 +356,9 @@ func _can_drop_in_hand(slot: int) -> bool:
 	return displaced == null or _held_from_hand >= 0 or inventory.has_space_for(displaced)
 
 func _hand_slot_at_mouse() -> int:
-	if _hands_ui == null or hands == null:
+	if _hands_view == null or hands == null:
 		return -1
-	return _hands_ui.slot_at(_hands_ui.get_local_mouse_position())
-
-## Ask UIHands to show its drop zones while a drag is in flight.
-func _update_drop_hint() -> void:
-	if _hands_ui != null:
-		_hands_ui.set_drop_hint(_held_item != null, _hand_slot_at_mouse())
+	return _hands_view.slot_at(get_local_mouse_position())
 
 func _cell_at(pos: Vector2) -> Vector2i:
 	var rel := pos - _grid_offset

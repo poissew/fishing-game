@@ -5,7 +5,6 @@ var inventory:Inventory = Inventory.new()
 var inventory_ui:UIInventory = null
 
 var hands:Hands = Hands.new()
-var hands_ui:UIHands = null
 
 ## The rod currently held in a hand, if any. Hands are the source of truth.
 var equipped_rod: RodInstance:
@@ -21,6 +20,7 @@ const JUMP_VELOCITY = 4.5
 
 @onready var head:Node3D = $head
 @onready var camera:Camera3D = $head/Camera3D
+@onready var hands_viewmodel:HandsViewmodel = $head/Camera3D/HandsViewmodel
 
 @onready var player_luck:int = 0
 
@@ -43,11 +43,8 @@ func _ready() -> void:
 	inventory_ui.item_requested_equip.connect(_on_equip_requested)
 	add_child(inventory_ui)
 
-	var hands_scene = load("res://ui/UI_Hands.tscn")
-	hands_ui = hands_scene.instantiate()
-	hands_ui.bind_hands(hands)
-	add_child(hands_ui)
-	inventory_ui.bind_hands(hands, hands_ui)
+	hands_viewmodel.bind_hands(hands, camera)
+	inventory_ui.bind_hands(hands, hands_viewmodel)
 
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	var _inst = RodInstance.new()
