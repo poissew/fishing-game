@@ -8,7 +8,7 @@ enum Slot { LEFT, RIGHT }
 
 const SLOT_COUNT := 2
 
-signal changed
+## Redraws are driven by Resource's built-in `changed` signal (see emit_changed).
 
 @export var slots: Array[ItemInstance] = [null, null]
 
@@ -28,7 +28,7 @@ func set_item(slot: int, item: ItemInstance) -> void:
 	if not is_valid_slot(slot):
 		return
 	slots[slot] = item
-	changed.emit()
+	emit_changed()
 
 func clear(slot: int) -> ItemInstance:
 	var item := get_item(slot)
