@@ -129,6 +129,8 @@ func cast_bobber():
 
 	var force := forward * 10.0 + Vector3.UP * 3.0
 	current_bobber.apply_central_impulse(force)
+	current_bobber.reel_target = camera
+	current_bobber.reel_speed = 6.0 + equipped_rod.data.reel_speed
 	current_bobber.ttf.wait_time = randomizer.RNG.randf_range(1, 15 - equipped_rod.data.reel_speed) - player_luck
 	current_bobber.start_timer()
 
