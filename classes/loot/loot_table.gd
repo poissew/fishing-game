@@ -39,6 +39,3 @@ func pick_entry(rng: RandomNumberGenerator) -> LootEntry:
 
 	# Fallback réellement safe
 	return valid[0]
-
-func pick_item(rng: RandomNumberGenerator) -> Item:
-	return pick_entry(rng).item

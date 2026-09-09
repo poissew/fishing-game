@@ -36,9 +36,6 @@ func clear(slot: int) -> ItemInstance:
 		set_item(slot, null)
 	return item
 
-func is_empty(slot: int) -> bool:
-	return get_item(slot) == null
-
 func first_free_slot() -> int:
 	for i in SLOT_COUNT:
 		if slots[i] == null:

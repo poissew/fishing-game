@@ -14,7 +14,6 @@ var equipped_rod: RodInstance:
 var bobber: PackedScene = load("res://objects/Bobber.tscn")
 
 const SPEED = 5.0
-const JUMP_VELOCITY = 4.5
 
 @onready var _world = $".."
 
