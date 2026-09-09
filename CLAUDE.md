@@ -57,6 +57,14 @@ ItemInstance (Resource)   — runtime placement: data ref + grid position + rota
 - `UIInventory` (`classes/ui/UI_Inventory.gd`, Control) — bound to an `Inventory` via `bind_inventory()`; emits `item_requested_equip`
 - `InventorySlot` (`classes/ui/InventorySlot.gd`, Panel) — individual cell, draws item icon
 
+### Hands
+
+- `Hands` (Resource) — two slots (`Hands.Slot.LEFT` / `RIGHT`), each holding one `ItemInstance` or null; emits `changed`
+- `UIHands` (`classes/ui/UI_Hands.gd`, Control) — always-on HUD panel in the bottom-right; pure view, bound via `bind_hands()`
+- Hands are the source of truth for what is equipped: `Player.equipped_rod` is a read-only property backed by `hands.get_rod()`
+- Use `Player.equip_item(item, slot)` / `unequip_slot(slot)` to move items between hands and inventory
+- While the inventory is open, items can be dragged between the grid and the hand slots; `E` on a held item equips it
+
 ### Input map
 
 | Action | Key/Button |
