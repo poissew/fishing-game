@@ -1,7 +1,6 @@
 [gd_resource type="Resource" script_class="FishData" format=3 uid="uid://bg80eegtrtm45"]
 
 [ext_resource type="Script" uid="uid://b3tnjarefmysf" path="res://classes/fish_data.gd" id="1_31gdu"]
-[ext_resource type="PackedScene" uid="uid://xplhxl3p6fk2" path="res://models/chf_16_cod_1.tscn" id="1_luibe"]
 
 [sub_resource type="Curve" id="Curve_1rbg8"]
 _limits = [0.5, 5.0, 0.0, 1.0]
@@ -13,7 +12,6 @@ script = ExtResource("1_31gdu")
 min_size = 0.3
 max_size = 0.9
 base_value = 3
-mesh = ExtResource("1_luibe")
 price_curve = SubResource("Curve_1rbg8")
 name = "Cod"
 size = Vector2i(1, 2)

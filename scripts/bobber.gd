@@ -22,7 +22,6 @@ enum BOBBER_STATE { ## état du bobber (ex: en l'air, dans l'eau etc...)
 	REELING ## Comportement quand on ramène la canne vers soi
 }
 
-@onready var splash_part:PackedScene = load("res://objects/particles/water_splash.tscn")
 @onready var ttf:Timer = $TimeToFish
 var current_state:BOBBER_STATE = BOBBER_STATE.IN_AIR
 @export var fishing_loot: LootTable
@@ -51,7 +50,6 @@ const CAUGHT_SPIN_ROLL_RANGE := Vector2(8.0, 16.0)
 var _reel_start_pos: Vector3
 var _reel_distance: float = 1.0
 var _reel_progress: float = 0.0
-var _reel_time: float = 0.0
 var _caught_visual: Node3D = null
 var _caught_spin: Vector3 = Vector3.ZERO
 static var _placeholder_texture: Texture2D = null
@@ -147,7 +145,6 @@ func _start_reel() -> void :
 
 	_reel_start_pos = global_position
 	_reel_progress = 0.0
-	_reel_time = 0.0
 	_reel_distance = maxf(_reel_start_pos.distance_to(_get_reel_target_pos()), 0.001)
 
 func _reel_behavior(delta: float) -> void :
@@ -156,7 +153,6 @@ func _reel_behavior(delta: float) -> void :
 		return
 
 	var target := _get_reel_target_pos()
-	_reel_time += delta
 	_reel_progress = minf(_reel_progress + (reel_speed * delta) / _reel_distance, 1.0)
 
 	# ease < 1 : départ rapide (le coup de canne) puis arrivée en douceur.

@@ -27,7 +27,7 @@ Four autoloaded nodes are accessible from any script by name:
 
 ```
 Item (Resource)           — base item: id, name, icon, size, rotatable
-├── FishData              — adds min/max size, base_value, mesh, rarity, price_curve
+├── FishData              — adds min/max size, base_value, rarity, price_curve
 └── RodData               — adds power, durability_max, reel_speed
 
 ItemInstance (Resource)   — runtime placement: data ref + grid position + rotated flag
@@ -54,8 +54,7 @@ ItemInstance (Resource)   — runtime placement: data ref + grid position + rota
 ### Inventory
 
 - `Inventory` (Resource) — 2D grid (width × height) of `ItemInstance`; supports `place_item`, `rotate_item`, `try_place_anywhere`
-- `UIInventory` (`classes/ui/UI_Inventory.gd`, Control) — bound to an `Inventory` via `bind_inventory()`; emits `item_requested_equip`
-- `InventorySlot` (`classes/ui/InventorySlot.gd`, Panel) — individual cell, draws item icon
+- `UIInventory` (`classes/ui/UI_Inventory.gd`, Control) — bound to an `Inventory` via `bind_inventory()`; draws the whole panel and grid itself in `_draw()`; emits `item_requested_equip`
 
 ### Hands
 
@@ -87,7 +86,8 @@ ItemInstance (Resource)   — runtime placement: data ref + grid position + rota
 
 ## Key Conventions
 
-- Data (static properties) lives in `*Data` / `Item` **Resources** (`.tres` files), stored in `classes/`.
+- Data (static properties) lives in `*Data` / `Item` **Resources** (`.tres` files), stored in `data/`.
+- The game is sprite-only: items are drawn from their `Item.icon`, there are no 3D meshes for fish or held items.
 - Runtime state lives in `*Instance` **Resources** that wrap a `data` reference.
 - All random rolls go through `randomizer.RNG` (the shared, pre-seeded `RandomNumberGenerator`).
 - Water biome is determined by `Area3D` groups on the water body; the `Bobber` reads those groups on entry.
