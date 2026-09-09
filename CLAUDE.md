@@ -61,6 +61,7 @@ ItemInstance (Resource)   — runtime placement: data ref + grid position + rota
 
 - `Hands` (Resource) — two slots (`Hands.Slot.LEFT` / `RIGHT`), each holding one `ItemInstance` or null; emits `changed`
 - `UIHands` (`classes/ui/UI_Hands.gd`, Control) — always-on HUD panel in the bottom-right; pure view, bound via `bind_hands()`
+- The same node also drives two `Sprite2D` viewmodels (`LeftHand` / `RightHand`) showing the held items large at the bottom screen edges; `set_viewmodel_visible()` hides them while the inventory is open
 - Hands are the source of truth for what is equipped: `Player.equipped_rod` is a read-only property backed by `hands.get_rod()`
 - Use `Player.equip_item(item, slot)` / `unequip_slot(slot)` to move items between hands and inventory
 - While the inventory is open, items can be dragged between the grid and the hand slots; `E` on a held item equips it

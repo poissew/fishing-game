@@ -1,8 +1,11 @@
 extends Control
 class_name UIHands
 
-## Bottom-right HUD showing the two hand slots. Purely a view: it never mutates
-## the Hands resource. UIInventory drives drag/drop into it via slot_at().
+## View of what the player is holding, in two parts:
+##   - the small HANDS slot panel, pinned bottom-right
+##   - two big Sprite2D viewmodels of the held items, at the bottom screen edges
+## Purely a view: it never mutates the Hands resource. UIInventory drives
+## drag/drop into the slot panel via slot_at().
 
 const SLOT_SIZE := 28
 const GAP       := 4
@@ -11,6 +14,12 @@ const TITLE_H   := 10
 const MARGIN    := 6
 
 const SLOT_LABELS := ["L", "R"]
+
+# Viewmodel: the big Sprite2D of what each hand holds, down at the screen edges
+const VIEW_H      := 84.0   # on-screen sprite height, in viewport pixels
+const EDGE_MARGIN := 10.0   # left sprite's gap from the screen edge
+const PANEL_GAP   := 6.0    # right sprite's gap from the HANDS panel
+const SINK        := 14.0   # how far the sprites hang below the bottom edge
 
 # Panel colors
 const C_PANEL_BG     := Color(0.09, 0.13, 0.09, 0.97)
@@ -28,8 +37,11 @@ const C_BAR_FG       := Color(0.36, 0.74, 0.34, 1.00)
 
 var hands: Hands = null
 
+@onready var _viewmodels: Array[Sprite2D] = [$LeftHand as Sprite2D, $RightHand as Sprite2D]
+
 var _default_icon: Texture2D = preload("res://icon.svg")
 var _highlight: int = -1
+var _viewmodel_visible: bool = true
 
 # ── Lifecycle ─────────────────────────────────────────────────────────────────
 
@@ -39,15 +51,17 @@ func bind_hands(h: Hands) -> void:
 	hands = h
 	if hands != null:
 		hands.changed.connect(_on_hands_changed)
-	queue_redraw()
+	_on_hands_changed()
 
 func _ready() -> void:
 	# The panel is HUD only — never swallow clicks meant for the world/inventory.
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	get_viewport().size_changed.connect(queue_redraw)
+	get_viewport().size_changed.connect(_on_hands_changed)
+	_on_hands_changed()
 
 func _on_hands_changed() -> void:
 	queue_redraw()
+	_refresh_viewmodels()
 
 ## Highlight a slot (drop target / hover). -1 clears it.
 func set_highlight(slot: int) -> void:
@@ -55,6 +69,47 @@ func set_highlight(slot: int) -> void:
 		return
 	_highlight = slot
 	queue_redraw()
+
+## Hide the big hand sprites — e.g. while the inventory dims the whole screen.
+func set_viewmodel_visible(value: bool) -> void:
+	if value == _viewmodel_visible:
+		return
+	_viewmodel_visible = value
+	_refresh_viewmodels()
+
+# ── Viewmodel ─────────────────────────────────────────────────────────────────
+
+func _refresh_viewmodels() -> void:
+	# bind_hands() runs before the node enters the tree, so @onready isn't set yet
+	if not is_node_ready() or hands == null:
+		return
+	for slot in Hands.SLOT_COUNT:
+		_update_viewmodel(slot)
+
+func _update_viewmodel(slot: int) -> void:
+	var sprite := _viewmodels[slot]
+	var item   := hands.get_item(slot)
+	if item == null or not _viewmodel_visible:
+		sprite.visible = false
+		return
+
+	sprite.texture = item.data.icon if item.data.icon else _default_icon
+	var tex_size := sprite.texture.get_size()
+	if tex_size.y <= 0.0:
+		sprite.visible = false
+		return
+
+	sprite.scale    = Vector2.ONE * (VIEW_H / tex_size.y)
+	sprite.position = _viewmodel_position(slot, tex_size.x * sprite.scale.x)
+	sprite.visible  = true
+
+func _viewmodel_position(slot: int, width: float) -> Vector2:
+	var vp := get_viewport_rect().size
+	var y  := vp.y - VIEW_H * 0.5 + SINK
+	if slot == Hands.Slot.LEFT:
+		return Vector2(EDGE_MARGIN + width * 0.5, y)
+	# The right hand tucks inboard of the HANDS panel so the two never overlap
+	return Vector2(_panel_origin().x - PANEL_GAP - width * 0.5, y)
 
 # ── Layout ────────────────────────────────────────────────────────────────────
 
