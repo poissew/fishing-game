@@ -87,8 +87,6 @@ func _toggle_inventory() -> void:
 	else:
 		inventory_ui.open()
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-	# The hand sprites would otherwise sit on top of the dimmed inventory screen
-	hands_ui.set_viewmodel_visible(not inventory_ui.visible)
 
 func _on_equip_requested(item: ItemInstance) -> void:
 	if equip_item(item):

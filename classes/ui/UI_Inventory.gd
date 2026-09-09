@@ -81,7 +81,7 @@ func close() -> void:
 	if _held_item != null:
 		_cancel_drag()
 	visible = false
-	_set_hand_highlight(-1)
+	_update_drop_hint()
 	_clear_preview()
 
 # ── Drawing ───────────────────────────────────────────────────────────────────
@@ -175,7 +175,7 @@ func _input(event: InputEvent) -> void:
 		_mouse_pos    = mpos
 		_hovered_cell = _cell_at(mpos)
 		var hand_slot := _hand_slot_at_mouse()
-		_set_hand_highlight(hand_slot)
+		_update_drop_hint()
 		if _held_item == null:
 			var hand_item: ItemInstance = hands.get_item(hand_slot) if hands != null else null
 			if hand_item != null:
@@ -218,6 +218,7 @@ func _try_pickup(cell: Vector2i) -> void:
 	inventory.items.erase(item)
 	_held_item = item
 	_show_preview(item)
+	_update_drop_hint()
 	queue_redraw()
 
 func _try_pickup_hand() -> void:
@@ -232,6 +233,7 @@ func _try_pickup_hand() -> void:
 	hands.clear(slot)
 	_held_item = item
 	_show_preview(item)
+	_update_drop_hint()
 	queue_redraw()
 
 func _try_drop(hovered: Vector2i) -> void:
@@ -272,6 +274,7 @@ func _release_held() -> void:
 	_held_item      = null
 	_held_from_hand = -1
 	_clear_preview()
+	_update_drop_hint()
 
 func _cancel_drag() -> void:
 	_held_item.rotated = _origin_rot
@@ -283,6 +286,7 @@ func _cancel_drag() -> void:
 		inventory.items.append(_held_item)
 	_held_item      = null
 	_held_from_hand = -1
+	_update_drop_hint()
 
 ## Hand the dragged item to the player. Clearing the drag first matters: the
 ## listener may close the inventory, which would otherwise cancel the drag and
@@ -341,9 +345,10 @@ func _hand_slot_at_mouse() -> int:
 		return -1
 	return _hands_ui.slot_at(_hands_ui.get_local_mouse_position())
 
-func _set_hand_highlight(slot: int) -> void:
+## Ask UIHands to show its drop zones while a drag is in flight.
+func _update_drop_hint() -> void:
 	if _hands_ui != null:
-		_hands_ui.set_highlight(slot)
+		_hands_ui.set_drop_hint(_held_item != null, _hand_slot_at_mouse())
 
 func _cell_at(pos: Vector2) -> Vector2i:
 	var rel := pos - _grid_offset
