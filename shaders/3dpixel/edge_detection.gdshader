@@ -1,120 +1,112 @@
 shader_type spatial;
-render_mode ambient_light_disabled;
 
-uniform sampler2D DEPTH_TEXTURE : hint_depth_texture;
-uniform sampler2D SCREEN_TEXTURE : hint_screen_texture;
-uniform sampler2D NORMAL_TEXTURE : hint_normal_roughness_texture;
+/*
+ * Screen-space outline pass, drawn on a full-screen quad parented to the camera.
+ *
+ * It draws ONLY the lines, as a transparent overlay. Everything underneath —
+ * including the alpha-scissor Sprite3Ds of the hands viewmodel — reaches the
+ * screen untouched. The previous version re-blitted hint_screen_texture into
+ * ALBEDO and overrode DIFFUSE_LIGHT for the whole screen, which is what made
+ * held sprites render wrong.
+ *
+ * Two constraints from the GL Compatibility renderer shape this shader:
+ *   - hint_normal_roughness_texture is Forward+ only and will not compile here,
+ *     so edges are derived from depth alone.
+ *   - the depth buffer is only wired up for reads made directly inside
+ *     fragment(), so every texture(DEPTH_TEXTURE, ...) call lives there.
+ */
 
-uniform float lightIntensity = 1.25;
-uniform float lineAlpha = 0.7;
-uniform bool useLighting = true;
-uniform float lineHighlight = 0.2;
-uniform float lineShadow = 0.55;
+render_mode unshaded, blend_mix, cull_disabled,
+	depth_draw_never, depth_test_disabled, fog_disabled;
 
-varying vec2 screen_uv;
-varying float lineMask;
+uniform sampler2D DEPTH_TEXTURE : hint_depth_texture, repeat_disable, filter_nearest;
+
+uniform vec4 line_color : source_color = vec4(0.05, 0.05, 0.08, 1.0);
+uniform float line_alpha : hint_range(0.0, 1.0) = 0.7;
+/* Line width, in screen pixels */
+uniform float thickness : hint_range(1.0, 4.0) = 1.0;
+/* Silhouette sensitivity: a depth step this large relative to the pixel's own
+   distance from the camera counts as an edge */
+uniform float silhouette_threshold : hint_range(0.001, 0.5) = 0.02;
+/* Interior-crease sensitivity, same units */
+uniform float crease_threshold : hint_range(0.001, 0.5) = 0.05;
+/* Outlines fade out between these distances so far-off terrain does not turn
+   into noise. The sky sits past the far end, so it never gets lines. */
+uniform float fade_start = 40.0;
+uniform float fade_end = 70.0;
 
 /* ---------------- Utilities ---------------- */
 
-float get_depth(vec2 uv, float mask) {
-	return texture(DEPTH_TEXTURE, uv).r * mask;
-}
-
-vec3 get_normal(vec2 uv, float mask) {
-	return (texture(NORMAL_TEXTURE, uv).rgb * 2.0 - 1.0) * mask;
-}
-
-float normal_edge_indicator(
-	vec3 bias,
-	vec3 n,
-	vec3 n2,
-	float depth_diff
-) {
-	float normal_diff = dot(n - n2, bias);
-	float normal_indicator = smoothstep(-0.01, 0.01, normal_diff);
-	float depth_indicator = step(0.0, depth_diff + 0.001);
-	return (1.0 - dot(n, n2)) * normal_indicator * depth_indicator;
+/* View-space distance from a raw depth sample. Takes the already-sampled value
+   so the depth texture itself is only ever read inside fragment(). */
+float linear_depth(float raw, vec2 uv, mat4 inv_projection) {
+	vec4 view = inv_projection * vec4(vec3(uv * 2.0 - 1.0, raw), 1.0);
+	return -view.z / view.w;
 }
 
 /* ---------------- Vertex ---------------- */
 
 void vertex() {
+	/* Cover the whole screen no matter where the quad actually sits */
 	POSITION = vec4(VERTEX.xy, 1.0, 1.0);
 }
 
 /* ---------------- Fragment ---------------- */
 
 void fragment() {
-	screen_uv = SCREEN_UV;
-	vec2 texel = 1.0 / VIEWPORT_SIZE.xy;
+	vec2 texel = thickness / VIEWPORT_SIZE;
+	vec2 uv_l = SCREEN_UV - vec2(texel.x, 0.0);
+	vec2 uv_r = SCREEN_UV + vec2(texel.x, 0.0);
+	vec2 uv_u = SCREEN_UV - vec2(0.0, texel.y);
+	vec2 uv_d = SCREEN_UV + vec2(0.0, texel.y);
 
-	vec2 offsets[4] = {
-		screen_uv + vec2(0.0, -1.0) * texel,
-		screen_uv + vec2(0.0,  1.0) * texel,
-		screen_uv + vec2(1.0,  0.0) * texel,
-		screen_uv + vec2(-1.0, 0.0) * texel
-	};
+	float d_c = linear_depth(texture(DEPTH_TEXTURE, SCREEN_UV).r, SCREEN_UV, INV_PROJECTION_MATRIX);
+	float d_l = linear_depth(texture(DEPTH_TEXTURE, uv_l).r, uv_l, INV_PROJECTION_MATRIX);
+	float d_r = linear_depth(texture(DEPTH_TEXTURE, uv_r).r, uv_r, INV_PROJECTION_MATRIX);
+	float d_u = linear_depth(texture(DEPTH_TEXTURE, uv_u).r, uv_u, INV_PROJECTION_MATRIX);
+	float d_d = linear_depth(texture(DEPTH_TEXTURE, uv_d).r, uv_d, INV_PROJECTION_MATRIX);
 
-	/* Roughness mask (alpha of normal texture) */
-	float outlineMask = ceil(texture(NORMAL_TEXTURE, screen_uv).a);
+	/* Thresholds scale with distance, so a line is the same width in world
+	   terms whether the object is at arm's length or across the lake */
+	float scale = max(d_c, 0.05);
 
-	/* -------- Depth edge detection -------- */
+	/* -------- Silhouettes -------- */
 
-	float depth = get_depth(screen_uv, outlineMask);
-	float depthDiff = 0.0;
-	float invDepth = 0.5;
+	/* Only fires where a neighbour is FARTHER away, so the line lands on the
+	   near object rather than doubling up on both sides of the step */
+	float step_out = max(
+		max(d_l - d_c, d_r - d_c),
+		max(d_u - d_c, d_d - d_c)
+	) / scale;
+	float silhouette = smoothstep(
+		silhouette_threshold,
+		silhouette_threshold * 2.0,
+		step_out
+	);
 
-	for (int i = 0; i < 4; i++) {
-		float d = get_depth(offsets[i], outlineMask);
-		depthDiff += clamp(d - depth, 0.0, 1.0);
-		invDepth += depth - d;
-	}
+	/* -------- Interior creases -------- */
 
-	invDepth = clamp(invDepth, 0.0, 1.0);
-	invDepth = smoothstep(0.98, 1.0, invDepth);
-	depthDiff = smoothstep(0.001, 0.003, depthDiff);
+	/* Second derivative of INVERSE depth. Under a perspective projection 1/z is
+	   exactly linear across any flat surface, so a floor seen at a grazing
+	   angle curves by zero and picks up no false lines; only an actual change
+	   of surface angle registers. */
+	float i_c = 1.0 / scale;
+	float i_l = 1.0 / max(d_l, 0.05);
+	float i_r = 1.0 / max(d_r, 0.05);
+	float i_u = 1.0 / max(d_u, 0.05);
+	float i_d = 1.0 / max(d_d, 0.05);
+	float curvature = abs((i_l + i_r + i_u + i_d) - 4.0 * i_c) * scale;
+	float crease = smoothstep(
+		crease_threshold,
+		crease_threshold * 2.0,
+		curvature
+	);
 
-	/* -------- Normal edge detection -------- */
+	/* -------- Output -------- */
 
-	vec3 normal = get_normal(screen_uv, outlineMask);
-	vec3 bias = vec3(1.0);
-	float normalDiff = 0.0;
+	float fade = 1.0 - smoothstep(fade_start, fade_end, d_c);
+	float edge = max(silhouette, crease) * fade;
 
-	for (int i = 0; i < 4; i++) {
-		vec3 n = get_normal(offsets[i], outlineMask);
-		normalDiff += normal_edge_indicator(bias, normal, n, depthDiff);
-	}
-
-	normalDiff = smoothstep(0.15, 0.3, normalDiff);
-	normalDiff = clamp(normalDiff - invDepth, 0.0, 1.0);
-
-	/* -------- Final color -------- */
-
-	ALBEDO = texture(SCREEN_TEXTURE, screen_uv).rgb;
-	lineMask = clamp(depthDiff + normalDiff * 5.0, 0.0, lineAlpha);
-
-	if (!useLighting) {
-		ALBEDO += normalDiff * lineHighlight;
-		ALBEDO -= ALBEDO * depthDiff * lineShadow;
-	}
-}
-
-/* ---------------- Lighting ---------------- */
-
-void light() {
-	if (!useLighting) {
-		DIFFUSE_LIGHT = vec3(1.0);
-	}
-
-	vec3 normal = texture(NORMAL_TEXTURE, screen_uv).rgb * 2.0 - 1.0;
-	float nl = max(dot(normal, LIGHT), 0.0);
-	nl = pow(nl, 2.5);
-
-	if (LIGHT_IS_DIRECTIONAL) {
-		DIFFUSE_LIGHT += mix(
-			vec3(1.0),
-			nl * LIGHT_COLOR * lightIntensity,
-			lineMask
-		);
-	}
+	ALBEDO = line_color.rgb;
+	ALPHA = clamp(edge * line_alpha * line_color.a, 0.0, 1.0);
 }

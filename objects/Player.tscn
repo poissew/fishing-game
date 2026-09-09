@@ -28,13 +28,15 @@ flip_faces = true
 size = Vector2(2, 2)
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_6vqvp"]
-render_priority = 0
+render_priority = 127
 shader = ExtResource("2_gndvh")
-shader_parameter/lightIntensity = 1.25
-shader_parameter/lineAlpha = 0.3
-shader_parameter/useLighting = true
-shader_parameter/lineHighlight = 0.2
-shader_parameter/lineShadow = 0.55
+shader_parameter/line_color = Color(0.05, 0.05, 0.08, 1)
+shader_parameter/line_alpha = 0.6
+shader_parameter/thickness = 1.0
+shader_parameter/silhouette_threshold = 0.02
+shader_parameter/crease_threshold = 0.05
+shader_parameter/fade_start = 40.0
+shader_parameter/fade_end = 70.0
 
 [node name="Player" type="CharacterBody3D" unique_id=926964297]
 script = ExtResource("1_8ak8y")
