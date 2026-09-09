@@ -6,6 +6,11 @@ var inventory_ui:UIInventory = null
 
 var hands:Hands = Hands.new()
 
+var wallet:Wallet = Wallet.new()
+var shop_ui:UIShop = null
+## Shopkeeper whose range the player is standing in, or null.
+var _nearby_shopkeeper: Shopkeeper = null
+
 ## The rod currently held in a hand, if any. Hands are the source of truth.
 var equipped_rod: RodInstance:
 	get:
@@ -17,6 +22,7 @@ const SPEED = 5.0
 
 @onready var _world = $".."
 
+@onready var interact_range:Area3D = $InteractRange
 @onready var head:Node3D = $head
 @onready var camera:Camera3D = $head/Camera3D
 @onready var hands_viewmodel:HandsViewmodel = $head/Camera3D/HandsViewmodel
@@ -25,12 +31,28 @@ const SPEED = 5.0
 
 func _input(event: InputEvent) -> void:
 	if event.is_action_pressed("pause"):
-		get_tree().quit()
+		if shop_ui.is_open:
+			_close_shop()
+		elif inventory_ui.visible:
+			_toggle_inventory()
+		else:
+			get_tree().quit()
+		return
+
+	if shop_ui.is_open:
+		return
 
 	if event.is_action_pressed("open_inventory"):
 		_toggle_inventory()
 
-	if not inventory_ui.visible and Input.is_action_just_pressed("left_click"):
+	if inventory_ui.visible:
+		return
+
+	if event.is_action_pressed("interact") and _nearby_shopkeeper != null:
+		_open_shop(_nearby_shopkeeper)
+		return
+
+	if Input.is_action_just_pressed("left_click"):
 		use_rod()
 
 func _ready() -> void:
@@ -42,6 +64,17 @@ func _ready() -> void:
 	inventory_ui.item_requested_equip.connect(_on_equip_requested)
 	add_child(inventory_ui)
 
+	var shop = load("res://ui/UI_Shop.tscn")
+	shop_ui = shop.instantiate()
+	shop_ui.bind_wallet(wallet)
+	shop_ui.sell_requested.connect(_on_sell_requested)
+	shop_ui.sell_all_requested.connect(_on_sell_all_requested)
+	shop_ui.close_requested.connect(_close_shop)
+	add_child(shop_ui)
+
+	interact_range.body_entered.connect(_on_interact_range_entered)
+	interact_range.body_exited.connect(_on_interact_range_exited)
+
 	hands_viewmodel.bind_hands(hands, camera)
 	inventory_ui.bind_hands(hands, hands_viewmodel)
 
@@ -51,7 +84,7 @@ func _ready() -> void:
 	equip_item(_inst, Hands.Slot.RIGHT)
 
 func _unhandled_input(event: InputEvent) -> void:
-	if inventory_ui.visible:
+	if inventory_ui.visible or shop_ui.is_open:
 		return
 	if event is InputEventMouseMotion:
 		head.rotate_y(-event.relative.x * options.MOUSE_SENS)
@@ -59,7 +92,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		camera.rotation.x = clamp(camera.rotation.x, deg_to_rad(-80), deg_to_rad(80))
 
 func _physics_process(delta: float) -> void:
-	if inventory_ui.visible:
+	if inventory_ui.visible or shop_ui.is_open:
 		return
 
 	if not is_on_floor():
@@ -132,6 +165,81 @@ func unequip_rod() -> bool:
 	if slot < 0:
 		return false
 	return unequip_slot(slot)
+
+## Everything the player has on them: the inventory grid plus both hands.
+## The array is a copy, so it is safe to remove items while iterating it.
+func carried_items() -> Array[ItemInstance]:
+	var carried: Array[ItemInstance] = []
+	carried.append_array(inventory.items)
+	for slot in Hands.SLOT_COUNT:
+		var item := hands.get_item(slot)
+		if item != null:
+			carried.append(item)
+	return carried
+
+# ── Shop ──────────────────────────────────────────────────────────────────────
+
+## The InteractRange Area3D sweeps up everything solid around the player; only
+## shopkeepers are interactable for now.
+func _on_interact_range_entered(body: Node3D) -> void:
+	if body is Shopkeeper:
+		_nearby_shopkeeper = body as Shopkeeper
+		shop_ui.set_nearby(_nearby_shopkeeper)
+
+func _on_interact_range_exited(body: Node3D) -> void:
+	if body != _nearby_shopkeeper:
+		return
+	_nearby_shopkeeper = null
+	shop_ui.set_nearby(null)
+	if shop_ui.is_open:
+		_close_shop()
+
+func _open_shop(keeper: Shopkeeper) -> void:
+	shop_ui.open(keeper, carried_items())
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
+func _close_shop() -> void:
+	shop_ui.close()
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
+## Sell one carried item to the shopkeeper the player is standing next to.
+## Returns what was paid, or 0 when the sale did not happen.
+func sell_item(item: ItemInstance) -> int:
+	if _nearby_shopkeeper == null or item == null:
+		return 0
+	var price := _nearby_shopkeeper.offer_for(item)
+	if price <= 0 or not _take_carried(item):
+		return 0
+	wallet.add(price)
+	return price
+
+func sell_all_fish() -> int:
+	var total := 0
+	for item in carried_items():
+		if item is FishInstance:
+			total += sell_item(item)
+	return total
+
+## Remove `item` from wherever the player is carrying it.
+func _take_carried(item: ItemInstance) -> bool:
+	var slot := hands.slot_of(item)
+	if slot >= 0:
+		hands.clear(slot)
+		return true
+	if inventory.items.has(item):
+		inventory.items.erase(item)
+		return true
+	return false
+
+func _on_sell_requested(item: ItemInstance) -> void:
+	sell_item(item)
+	shop_ui.refresh(carried_items())
+
+func _on_sell_all_requested() -> void:
+	sell_all_fish()
+	shop_ui.refresh(carried_items())
+
+# ── Fishing ───────────────────────────────────────────────────────────────────
 
 func can_fish() -> bool:
 	return equipped_rod != null and not equipped_rod.is_broken()
