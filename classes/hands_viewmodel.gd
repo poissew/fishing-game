@@ -2,18 +2,22 @@ class_name HandsViewmodel
 extends Node3D
 
 ## First-person view of what the player is holding, in the world rather than on
-## the HUD: the item's own 3D model, parented to the camera so it rides along
-## with the view and takes the scene's lighting and the pixel/edge post-process.
+## the HUD, parented to the camera so it rides along with the view and takes the
+## scene's lighting and the pixel/edge post-process.
 ##
-## Fish are scaled by their real caught length, using the same unit convention
-## as Fish._apply_random_scale().
+## Fish are held as Sprite3Ds of their icon, sized by their real caught length.
+## Other items use their own 3D scene.
 ##
 ## The LeftHand / RightHand anchors are plain Node3Ds in Player.tscn — move or
 ## rotate them in the editor to pose the hands.
 
-const MODEL_SCALE   := 0.15  # matches Fish.gd
-const MIN_FISH_SIZE := 0.1   # keeps a zero-size fish (unset min/max) visible
 const ROD_SCENE: PackedScene = preload("res://objects/Rod.tscn")
+const DEFAULT_ICON: Texture2D = preload("res://icon.svg")
+
+# Held-fish sprite height, in world units. A 1.0-length fish gets FISH_BASE_H.
+const FISH_BASE_H := 0.22
+const FISH_MIN_H  := 0.09
+const FISH_MAX_H  := 0.51
 
 ## Side of the square screen-space drop target, in viewport pixels
 const DROP_SIZE := 48.0
@@ -69,14 +73,24 @@ func _make_visual(item: ItemInstance) -> Node3D:
 	return null
 
 func _make_fish_visual(fish: FishInstance) -> Node3D:
-	var fish_data := fish.data as FishData
-	if fish_data == null or fish_data.mesh == null:
-		return null
-	# A holder keeps the scale off the model scene, which may carry its own
-	var holder := Node3D.new()
-	holder.add_child(fish_data.mesh.instantiate())
-	holder.scale = Vector3.ONE * maxf(fish.size, MIN_FISH_SIZE) * MODEL_SCALE
-	return holder
+	var sprite := Sprite3D.new()
+	sprite.texture = fish.data.icon if fish.data.icon else DEFAULT_ICON
+	sprite.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	# Discard rather than blend, so the sprite writes depth and the edge/pixel
+	# post-process treats it like the rest of the scene
+	sprite.alpha_cut = SpriteBase3D.ALPHA_CUT_DISCARD
+	var tex_h := sprite.texture.get_height()
+	if tex_h > 0:
+		sprite.pixel_size = _fish_height(fish) / float(tex_h)
+	return sprite
+
+## World height for a held fish. The square root keeps a 9.8m shark from being
+## 49x a 0.2m sardine, and the clamp keeps both extremes on screen; ordering
+## between catches is preserved throughout.
+func _fish_height(fish: FishInstance) -> float:
+	if fish.size <= 0.0:
+		return FISH_BASE_H
+	return clampf(FISH_BASE_H * sqrt(fish.size), FISH_MIN_H, FISH_MAX_H)
 
 # ── Screen-space drop targets ─────────────────────────────────────────────────
 

@@ -61,7 +61,8 @@ ItemInstance (Resource)   — runtime placement: data ref + grid position + rota
 
 - `Hands` (Resource) — two slots (`Hands.Slot.LEFT` / `RIGHT`), each holding one `ItemInstance` or null; emits `changed`
 - `HandsViewmodel` (`classes/hands_viewmodel.gd`, Node3D) — in-world first-person viewmodel under `head/Camera3D` in `Player.tscn`, with `LeftHand` / `RightHand` anchor Node3Ds. There is no hands HUD
-- It instantiates the item's real 3D model: `FishData.mesh` for fish, `objects/Rod.tscn` for rods. Fish are scaled by `FishInstance.size * MODEL_SCALE`, the same convention as `Fish._apply_random_scale()`, so a big catch is visibly big
+- Fish are held as a `Sprite3D` of `FishData.icon` (nearest filtering, `ALPHA_CUT_DISCARD` so they write depth for the edge shader); other items instantiate their own scene, e.g. `objects/Rod.tscn`
+- A held fish's world height comes from `FishInstance.size` over a `sqrt` curve clamped to `FISH_MIN_H`..`FISH_MAX_H`, so a big catch is visibly big without filling the view
 - Pose the hands by moving the anchor Node3Ds in the editor — nothing in the script hardcodes their placement
 - `get_screen_rect()` / `slot_at()` unproject an anchor through the camera so `UIInventory` can still drag items into and out of a hand; the zones are only drawn mid-drag
 - Hands are the source of truth for what is equipped: `Player.equipped_rod` is a read-only property backed by `hands.get_rod()`
