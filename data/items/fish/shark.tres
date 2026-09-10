@@ -12,5 +12,5 @@ rarity = 4
 id = 7
 name = "Shark"
 icon = ExtResource("1_xcket")
-size = Vector2i(2, 3)
+size = Vector2i(8, 4)
 metadata/_custom_type_script = "uid://b3tnjarefmysf"

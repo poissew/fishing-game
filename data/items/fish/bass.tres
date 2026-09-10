@@ -12,5 +12,5 @@ rarity = 1
 id = 8
 name = "Bass"
 icon = ExtResource("1_1mkea")
-size = Vector2i(1, 2)
+size = Vector2i(4, 2)
 metadata/_custom_type_script = "uid://b3tnjarefmysf"
