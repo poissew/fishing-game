@@ -1,5 +1,6 @@
 [gd_resource type="Resource" script_class="FishData" format=3 uid="uid://b51kb85a3n5uy"]
 
+[ext_resource type="Texture2D" uid="uid://cqaa0igjekjep" path="res://textures/fish/bass.png" id="1_1mkea"]
 [ext_resource type="Script" uid="uid://b3tnjarefmysf" path="res://classes/fish_data.gd" id="1_bass1"]
 
 [resource]
@@ -10,5 +11,6 @@ base_value = 5
 rarity = 1
 id = 8
 name = "Bass"
+icon = ExtResource("1_1mkea")
 size = Vector2i(1, 2)
 metadata/_custom_type_script = "uid://b3tnjarefmysf"

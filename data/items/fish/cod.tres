@@ -1,6 +1,7 @@
 [gd_resource type="Resource" script_class="FishData" format=3 uid="uid://bg80eegtrtm45"]
 
 [ext_resource type="Script" uid="uid://b3tnjarefmysf" path="res://classes/fish_data.gd" id="1_31gdu"]
+[ext_resource type="Texture2D" uid="uid://cdmsd7de3u5h5" path="res://textures/fish/cod.png" id="1_w64gl"]
 
 [sub_resource type="Curve" id="Curve_1rbg8"]
 _limits = [0.5, 5.0, 0.0, 1.0]
@@ -14,5 +15,6 @@ max_size = 0.9
 base_value = 3
 price_curve = SubResource("Curve_1rbg8")
 name = "Cod"
+icon = ExtResource("1_w64gl")
 size = Vector2i(1, 2)
 metadata/_custom_type_script = "uid://b3tnjarefmysf"

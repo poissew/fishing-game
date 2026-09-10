@@ -1,6 +1,7 @@
 [gd_resource type="Resource" script_class="FishData" format=3 uid="uid://bjqkwk7c5hdg8"]
 
 [ext_resource type="Script" uid="uid://b3tnjarefmysf" path="res://classes/fish_data.gd" id="1_wgxn4"]
+[ext_resource type="Texture2D" uid="uid://de6pmo0704824" path="res://textures/fish/shark.png" id="1_xcket"]
 
 [resource]
 script = ExtResource("1_wgxn4")
@@ -10,5 +11,6 @@ base_value = 5
 rarity = 4
 id = 7
 name = "Shark"
+icon = ExtResource("1_xcket")
 size = Vector2i(2, 3)
 metadata/_custom_type_script = "uid://b3tnjarefmysf"
