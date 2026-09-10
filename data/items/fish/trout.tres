@@ -3,13 +3,18 @@
 [ext_resource type="Script" uid="uid://b3tnjarefmysf" path="res://classes/fish_data.gd" id="1_5jji5"]
 [ext_resource type="Texture2D" uid="uid://b1wgcvxk5lemq" path="res://textures/fish/trout.png" id="1_etsia"]
 
+[sub_resource type="Curve" id="Curve_etsia"]
+_data = [Vector2(0, 0), 0.0, 1.9063399, 0, 0, Vector2(1, 1), 0.102936424, 0.0, 0, 0]
+point_count = 2
+
 [resource]
 script = ExtResource("1_5jji5")
-min_size = 0.1
-max_size = 0.3
-base_value = 2
+min_size = 0.2
+max_size = 0.8
+base_value = 8
+price_curve = SubResource("Curve_etsia")
 id = 4
 name = "Trout"
 icon = ExtResource("1_etsia")
-size = Vector2i(1, 2)
+size = Vector2i(4, 4)
 metadata/_custom_type_script = "uid://b3tnjarefmysf"
