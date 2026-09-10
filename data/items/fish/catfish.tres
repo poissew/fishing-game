@@ -1,5 +1,6 @@
 [gd_resource type="Resource" script_class="FishData" format=3 uid="uid://ddbyn5myydk8r"]
 
+[ext_resource type="Texture2D" uid="uid://d2gom5qvvm86x" path="res://textures/fish/catfish.png" id="1_85ss7"]
 [ext_resource type="Script" uid="uid://b3tnjarefmysf" path="res://classes/fish_data.gd" id="1_gkqo5"]
 
 [resource]
@@ -9,5 +10,6 @@ max_size = 0.8
 base_value = 3
 id = 3
 name = "Catfish"
+icon = ExtResource("1_85ss7")
 size = Vector2i(1, 2)
 metadata/_custom_type_script = "uid://b3tnjarefmysf"

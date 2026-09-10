@@ -27,5 +27,5 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1.5662911)
 [node name="Trees" parent="pixel/SubViewport" unique_id=1273550201 instance=ExtResource("3_h2yge")]
 transform = Transform3D(1.85, 0, 0, 0, 1.85, 0, 0, 0, 1.85, 0, -0.6632441, 0)
 
-[node name="Shopkeeper" parent="pixel/SubViewport" instance=ExtResource("4_shopk")]
+[node name="Shopkeeper" parent="pixel/SubViewport" unique_id=1963068962 instance=ExtResource("4_shopk")]
 transform = Transform3D(-0.7193, 0, 0.6947, 0, 1, 0, -0.6947, 0, -0.7193, -2, -1.0923, -0.5)
