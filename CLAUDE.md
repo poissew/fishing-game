@@ -31,7 +31,7 @@ Item (Resource)           — base item: id, name, icon, size, rotatable
 └── RodData               — adds power, durability_max, reel_speed
 
 ItemInstance (Resource)   — runtime placement: data ref + grid position + rotated flag
-├── FishInstance          — adds size, weight, quality, fighting stats; has create_fish_instance(FishData)
+├── FishInstance          — adds size, weight, quality, fighting stats, current_health; has create_fish_instance(FishData)
 └── RodInstance           — adds durability; has create_rod_instance(RodData)
 
 SpellData (Resource)      — static spell definition: name, base_power, base_type, base_cooldown

@@ -1,6 +1,12 @@
 class_name FishInstance
 extends ItemInstance
 
+## Fired whenever current_health moves, with the new value and the pool it is
+## measured against, so a health bar can bind to it without polling.
+signal health_changed(current: int, maximum: int)
+## Fired the moment current_health reaches 0.
+signal died
+
 ## What a fish sells for is its species' base_value pushed around by how good
 ## the individual catch is: rarity, length, build (weight for that length) and
 ## quality. Rarity is by far the biggest lever, then size.
@@ -30,9 +36,28 @@ const QUALITY_STEP := 0.1
 @export_category("Fighting Data")
 @export var phys_dmg: int
 @export var magic_dmg: int
-@export var health: int
+## The full health pool, rolled from the fish's real size. Damage taken during
+## a fight comes off current_health, not this.
+@export var health: int:
+	set(value):
+		health = maxi(0, value)
+		# Shrinking the pool must not leave the fish above its own maximum.
+		if current_health > health:
+			current_health = health
 ## Spell datatype is not implemented yet - slots are reserved but empty.
 @export var spells: Array = []
+
+## Health remaining right now, clamped to 0..health. Not exported: like
+## SpellInstance.cooldown_left it is per-battle state, not worth saving.
+var current_health: int = 0:
+	set(value):
+		var clamped := clampi(value, 0, health)
+		if clamped == current_health:
+			return
+		current_health = clamped
+		health_changed.emit(current_health, health)
+		if current_health == 0:
+			died.emit()
 
 func get_value() -> int:
 	var fish_data := data as FishData
@@ -92,4 +117,35 @@ func roll_fighting_data() -> void:
 	phys_dmg = fish_data.roll_phys_dmg(get_value())
 	magic_dmg = fish_data.roll_magic_dmg()
 	health = fish_data.roll_health(size)
+	current_health = health
 	spells = fish_data.roll_spells()
+
+## Sends the fish into a fight at full health.
+func reset_health() -> void:
+	current_health = health
+
+func is_alive() -> bool:
+	return current_health > 0
+
+## 0.0 dead, 1.0 untouched. For health bars.
+func health_ratio() -> float:
+	if health <= 0:
+		return 0.0
+	return float(current_health) / float(health)
+
+## Returns the damage actually taken, which is less than `amount` when the hit
+## kills - useful for overkill numbers and battle logs.
+func take_damage(amount: int) -> int:
+	if amount <= 0:
+		return 0
+	var before := current_health
+	current_health -= amount
+	return before - current_health
+
+## Returns the health actually restored, capped by the missing amount.
+func heal(amount: int) -> int:
+	if amount <= 0:
+		return 0
+	var before := current_health
+	current_health += amount
+	return current_health - before
