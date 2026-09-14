@@ -27,6 +27,13 @@ const QUALITY_STEP := 0.1
 @export var weight: float
 @export var quality: int
 
+@export_category("Fighting Data")
+@export var phys_dmg: int
+@export var magic_dmg: int
+@export var health: int
+## Spell datatype is not implemented yet - slots are reserved but empty.
+@export var spells: Array = []
+
 func get_value() -> int:
 	var fish_data := data as FishData
 	if fish_data == null:
@@ -73,4 +80,16 @@ func create_fish_instance(fish_data: FishData) -> FishInstance:
 	fish.weight = fish.size * WEIGHT_RATIO * randomizer.RNG.randf_range(
 		1.0 - WEIGHT_SPREAD, 1.0 + WEIGHT_SPREAD)
 	fish.quality = randomizer.RNG.randi_range(1, 5)
+	fish.roll_fighting_data()
 	return fish
+
+## Rolls the fighting stats. Physical damage depends on what the catch is worth
+## and health on its size, so this must run after size/weight/quality are set.
+func roll_fighting_data() -> void:
+	var fish_data := data as FishData
+	if fish_data == null:
+		return
+	phys_dmg = fish_data.roll_phys_dmg(get_value())
+	magic_dmg = fish_data.roll_magic_dmg()
+	health = fish_data.roll_health(size)
+	spells = fish_data.roll_spells()
