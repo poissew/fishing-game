@@ -13,8 +13,8 @@ extends Resource
 @export var base_power: int = 1
 ## Elemental family, decides which of the caster's damage stats it scales off.
 @export var base_type: SpellType.Type = SpellType.Type.PHYSICAL
-## Turns to wait between two casts. 0 means it can be cast every turn.
-@export var base_cooldown: int = 0
+## Seconds to wait between two casts. 0 means it can be recast immediately.
+@export_range(0, 60, 1, "or_greater", "suffix:s") var base_cooldown: int = 0
 
 func is_magical() -> bool:
 	return SpellType.is_magical(base_type)
