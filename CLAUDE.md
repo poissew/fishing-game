@@ -27,11 +27,11 @@ Four autoloaded nodes are accessible from any script by name:
 
 ```
 Item (Resource)           — base item: id, name, icon, size, rotatable
-├── FishData              — adds min/max size, base_value, rarity, price_curve
+├── FishData              — adds min/max size, base_value, rarity, price_curve, fighting data
 └── RodData               — adds power, durability_max, reel_speed
 
 ItemInstance (Resource)   — runtime placement: data ref + grid position + rotated flag
-├── FishInstance          — adds size, weight, quality; has create_fish_instance(FishData)
+├── FishInstance          — adds size, weight, quality, fighting stats; has create_fish_instance(FishData)
 └── RodInstance           — adds durability; has create_rod_instance(RodData)
 ```
 
