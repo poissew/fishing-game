@@ -22,6 +22,7 @@ Tablesdb="*uid://cwa262ijcxba7"
 randomizer="*res://randomizer.gd"
 options="*res://options.gd"
 daynight="*res://autoload/day_night.gd"
+gamephase="*res://autoload/game_phase.gd"
 
 [display]
 
