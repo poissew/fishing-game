@@ -21,6 +21,7 @@ Itemdb="*res://autoload/itemDB.tscn"
 Tablesdb="*uid://cwa262ijcxba7"
 randomizer="*res://randomizer.gd"
 options="*res://options.gd"
+daynight="*res://autoload/day_night.gd"
 
 [display]
 

@@ -14,7 +14,7 @@ Open the project in the Godot 4.6 editor and press **F5** (Run Project) or use t
 
 ### Autoloads (global singletons)
 
-Four autoloaded nodes are accessible from any script by name:
+Five autoloaded nodes are accessible from any script by name:
 
 | Name | File | Purpose |
 |------|------|---------|
@@ -22,6 +22,7 @@ Four autoloaded nodes are accessible from any script by name:
 | `Tablesdb` | `autoload/tablesDB.tscn` + `autoload/tables_db.gd` | Registry of all `LootTable` resources, keyed by string `id`. Use `Tablesdb.get_table(id)` |
 | `randomizer` | `randomizer.gd` | Shared `RandomNumberGenerator` instance. Use `randomizer.RNG` |
 | `options` | `options.gd` | Global settings (e.g. `options.MOUSE_SENS`) |
+| `daynight` | `autoload/day_night.gd` | Day/night clock. `daynight.is_night()`, `hour_of_day()`, `time_string()`, signals `phase_changed` / `hour_passed` / `day_passed` |
 
 ### Data / Resource hierarchy
 
@@ -54,6 +55,16 @@ SpellType (RefCounted)    — Type enum (PHYSICAL, FIRE, ICE, WATER, LIGHTNING, 
    - Timer expiry → `BITE` state; player presses **right-click** → `REELING`
    - On reel, calls `LootTable.pick_entry()` then emits `loot_rolled(item, amount)` back to Player
 3. **Player** receives `loot_rolled`, creates `FishInstance` objects via `FishInstance.create_fish_instance()`
+
+### Day/night cycle
+
+- One cycle is **20 real minutes**: `DAY_LENGTH` 600 s of daylight (06:00 → 18:00) then `NIGHT_LENGTH` 600 s of night (18:00 → 06:00). Time runs uniformly, so one in-game hour is 50 real seconds.
+- `daynight` (autoload) is the clock and nothing else — no scene or rendering dependencies. Query `is_day()` / `is_night()` / `hour_of_day()`, or connect to `phase_changed(is_day)`, `hour_passed(hour)`, `day_passed(day)`. `cycle_progress()` returns 0.0 at dawn, 0.25 at noon, 0.5 at dusk, 0.75 at midnight.
+- `set_time_of_day(hour)` jumps the clock; `time_scale` speeds it up or freezes it (handy for eyeballing a whole cycle without waiting 20 minutes).
+- `DayNightLighting` (`classes/day_night_lighting.gd`, Node3D) is the visual side, sitting in `levels/trees.tscn` as `DayNightCycle` with its `sun` export pointed at the `DirectionalLight3D`. It reads the clock each frame; the clock never pushes to it.
+- Because the game is sprite-first, **most of the scene ignores lights** — the ground is `SHADING_MODE_UNSHADED`, trees and held items are `Sprite3D`. So the cycle is carried mainly by a full-screen `ColorRect` multiplied over the viewport (`CanvasLayer` at layer `-1`: above the 3D world, below the UI on layer 0). It lives inside the low-res `SubViewport`, so it pixelates with everything else. Daytime tint is white, i.e. a no-op.
+- The sun and moon share one arc: each rises at the start of its phase, sits overhead halfway through, and sets at the end. Light colour, energy and sky dimming all interpolate continuously through dawn and dusk — `twilight_energy_ratio` is the shared floor both phases fade to, which is what stops the light popping at the handover.
+- `Camera3D` in `Player.tscn` carries its **own** `Environment`, which overrides the level's `WorldEnvironment`. `DayNightLighting._resolve_environment()` asks the current camera first for that reason.
 
 ### Inventory
 

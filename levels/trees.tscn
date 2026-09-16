@@ -4,6 +4,7 @@
 [ext_resource type="PackedScene" uid="uid://d44a8b31gtht" path="res://objects/scene/tree.tscn" id="2_gh6mx"]
 [ext_resource type="Texture2D" uid="uid://cya3vax21tv5c" path="res://textures/67_sea water foam texture-seamless.jpg" id="2_hb4ym"]
 [ext_resource type="Texture2D" uid="uid://dl112o6rnygjl" path="res://textures/sky_20_2k.png" id="3_in6ns"]
+[ext_resource type="Script" path="res://classes/day_night_lighting.gd" id="4_dnigh"]
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_gh6mx"]
 shading_mode = 0
@@ -82,3 +83,7 @@ directional_shadow_mode = 0
 directional_shadow_fade_start = 0.0
 directional_shadow_max_distance = 0.0
 directional_shadow_pancake_size = 0.0
+
+[node name="DayNightCycle" type="Node3D" parent="."]
+script = ExtResource("4_dnigh")
+sun = NodePath("../DirectionalLight3D")
