@@ -65,6 +65,7 @@ SpellType (RefCounted)    — Type enum (PHYSICAL, FIRE, ICE, WATER, LIGHTNING, 
 - Because the game is sprite-first, **most of the scene ignores lights** — the ground is `SHADING_MODE_UNSHADED`, trees and held items are `Sprite3D`. So the cycle is carried mainly by a full-screen `ColorRect` multiplied over the viewport (`CanvasLayer` at layer `-1`: above the 3D world, below the UI on layer 0). It lives inside the low-res `SubViewport`, so it pixelates with everything else. Daytime tint is white, i.e. a no-op.
 - The sun and moon share one arc: each rises at the start of its phase, sits overhead halfway through, and sets at the end. Light colour, energy and sky dimming all interpolate continuously through dawn and dusk — `twilight_energy_ratio` is the shared floor both phases fade to, which is what stops the light popping at the handover.
 - `Camera3D` in `Player.tscn` carries its **own** `Environment`, which overrides the level's `WorldEnvironment`. `DayNightLighting._resolve_environment()` asks the current camera first for that reason.
+- `UIDayNightIcon` (`classes/ui/UI_DayNightIcon.gd` + `ui/UI_DayNightIcon.tscn`) is the top-right HUD readout: `ui/icons/sun.png` spinning on itself while the sun is up, swapped for `ui/icons/lune.png` pulsing dim→bright→dim once it sets. Both run off one `spin_period`, so the two phases share a tempo. `Player` instantiates it **before** the inventory and shop so their full-screen dimming backgrounds draw over it.
 
 ### Inventory
 
