@@ -44,8 +44,10 @@ const QUALITY_STEP := 0.1
 		# Shrinking the pool must not leave the fish above its own maximum.
 		if current_health > health:
 			current_health = health
-## Spell datatype is not implemented yet - slots are reserved but empty.
-@export var spells: Array = []
+## What this fish can cast, rolled once with the rest of its fighting data.
+## The instances are per-fish: two fish carrying the same spell cool down
+## independently, because the cooldown lives on the instance.
+@export var spells: Array[SpellInstance] = []
 
 ## Health remaining right now, clamped to 0..health. Not exported: like
 ## SpellInstance.cooldown_left it is per-battle state, not worth saving.
@@ -123,6 +125,29 @@ func roll_fighting_data() -> void:
 ## Sends the fish into a fight at full health.
 func reset_health() -> void:
 	current_health = health
+
+## Spells enter a fight ready to cast, the way health enters it full.
+func reset_spells() -> void:
+	for spell in spells:
+		if spell != null:
+			spell.reset()
+
+## Counts every spell down. The battler owns the clock and calls this.
+func tick_spells(delta: float) -> void:
+	for spell in spells:
+		if spell != null:
+			spell.tick(delta)
+
+## Every spell waiting on `trigger` that is off cooldown, in the order the fish
+## carries them. All of them rather than the first: two spells that both go off
+## on a touch are two separate spells with two separate cooldowns, and a fish
+## carrying both should get both.
+func ready_spells(trigger: SpellData.Trigger) -> Array[SpellInstance]:
+	var ready: Array[SpellInstance] = []
+	for spell in spells:
+		if spell != null and spell.is_ready() and spell.data.trigger == trigger:
+			ready.append(spell)
+	return ready
 
 func is_alive() -> bool:
 	return current_health > 0

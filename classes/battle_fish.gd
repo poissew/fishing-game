@@ -16,9 +16,18 @@ extends RigidBody3D
 ## draining one another every frame, and every hit shoves the fish that took it
 ## away from whatever landed it, by however much it hurt.
 ##
-## Spells are not implemented yet. magic_dmg is read off the fish and exposed
-## here so that when they land they can roll their damage and feed it into the
-## same take_damage() a touch uses - nothing else needs to change.
+## Spells ride on the FishInstance and are cast from here. A spell that
+## triggers ON_HIT goes off on the next thing this fish runs into, fish or wall
+## or floor, rolls its damage through SpellInstance.try_cast() and feeds it into
+## the same take_damage() a touch uses - the only difference is that a blast
+## comes from a point in the world rather than from another fish, and so shoves
+## outwards from it, the caster included. A spell can also wait for the top of a
+## hop instead - see _tick_peak() - and stop the fish there while it fires, or
+## never fire at all and simply change how the fish behaves: a PASSIVE, read off
+## the fish once in bind_fish() rather than cast. A spell can also leave damage
+## behind it rather than dealing any - see apply_dot(), which is state on the
+## fish that was hit and not on the fish that hit it - or wait on a condition
+## rather than a moment, like a fish being underneath this one: _tick_overhead().
 ##
 ## The collider is a capsule lying down the length of the fish, sized off the
 ## icon's own aspect, so the hitbox is the shape of the thing on screen.
@@ -34,6 +43,12 @@ extends RigidBody3D
 const SCENE_PATH := "res://objects/BattleFish.tscn"
 const DEFAULT_ICON: Texture2D = preload("res://icon.svg")
 
+## Every battler in the tree joins this. A blast walks the group rather than
+## asking the physics server what is inside a sphere: contact callbacks run
+## mid-step, where a shape query is not welcome, and an arena holds a handful
+## of fish rather than a crowd.
+const GROUP := &"battlers"
+
 # -- Look ---------------------------------------------------------------------
 
 ## World length of a fish of size 1.0, and the clamp either side of it. Same
@@ -47,6 +62,12 @@ const MAX_LEN  := 2.20
 ## Smallest collider a fish can have, in case an icon turns up with no height
 ## worth speaking of.
 const MIN_RADIUS := 0.03
+
+## Tint a stunned fish is washed out towards, and how much of it is mixed in.
+## It has to read at a glance: a fish standing still because it is stunned and a
+## fish standing still because nothing is happening look the same otherwise.
+const STUN_COLOR := Color(1.0, 0.95, 0.55, 1.0)
+const STUN_TINT_MIX := 0.65
 
 ## Tint flashed on the sprite when the fish is hit, and how long it fades over.
 const HIT_COLOR := Color(1.0, 0.35, 0.35, 1.0)
@@ -116,7 +137,20 @@ const KNOCKBACK_PER_DAMAGE := 0.12
 const KNOCKBACK_LIFT := 0.25
 ## Ceiling on the speed one hit can add, in units per second, so that a shark
 ## hitting a sardine for 25 shoves it hard without firing it out of the arena.
+## Scaled along with the shove itself, so a spell that throws harder than a
+## touch is not handed back the difference by the cap.
 const KNOCKBACK_MAX_SPEED := 2.5
+
+## How fast the fish had to be rising the frame before for the top of a hop to
+## count as a peak. Barely over zero on purpose, and it has to stay there: one
+## physics frame of gravity is only 0.16 units/s at 60 Hz, so by definition a
+## fish about to turn over the top is crawling. Anything larger than that never
+## fires at all. What keeps the floor out of it is the _grounded check, not this.
+const PEAK_RISE := 0.02
+
+## Stands in for "this damage came from nowhere in particular". Damage carrying
+## it leaves the fish where it stands instead of picking a direction on its own.
+const NO_ORIGIN := Vector3.INF
 
 ## Fired after this fish lands a touch. `amount` is what the target actually
 ## lost, so an overkill hit reports the health it really took off.
@@ -124,6 +158,11 @@ signal dealt_damage(target: BattleFish, amount: int)
 ## Fired when this fish loses health. `from` is the fish that did it, or null
 ## for damage that came from somewhere else.
 signal took_damage(amount: int, from: BattleFish)
+## Fired when this fish is stunned, with how long it is out of action for.
+signal stunned(seconds: float)
+## Fired when this fish spends a spell, before the spell's damage lands.
+## `target` is the fish whose touch set an ON_HIT spell off, null otherwise.
+signal cast_spell(spell: SpellData, target: BattleFish)
 ## Fired the moment the bound fish runs out of health. The body is left in the
 ## arena, belly up - whoever spawned it decides when it leaves.
 ##
@@ -165,6 +204,39 @@ var _grounded := false
 ## Cooldown left per opponent, keyed by instance id.
 var _hit_cooldowns := {}
 
+## Seconds of stun left. A stunned fish does nothing whatsoever - no flopping,
+## no casting, and no damage to whatever walks into it - but it can still be
+## hurt, and anything already ticking on it keeps ticking.
+var _stun_left := 0.0
+
+## The damage-over-time effect this fish is under, if any. One slot rather than
+## one per attacker: a second application - from anyone - multiplies what is
+## already ticking instead of running alongside it, which is what "applying it
+## again doubles the damage" means. The ticks left are never topped up.
+var _dot: DotSpellData = null
+var _dot_damage := 0
+var _dot_ticks := 0
+var _dot_timer := 0.0
+var _dot_source: BattleFish = null
+
+## The fish's CowardSpellData, if it carries one: read once when the fish is
+## bound rather than looked up every hop. Null for a fish that will fight.
+var _coward: CowardSpellData = null
+
+## The volley a spell left running: what there is still to fire, at what, and
+## how long the fish hangs there before gravity gets it back.
+var _volley: BubbleSpellData = null
+var _volley_target: BattleFish = null
+var _volley_damage := 0
+var _volley_shots := 0
+var _volley_timer := 0.0
+var _hang_left := 0.0
+
+## The fish's velocity from before the physics step it is now being told about.
+## By the time body_entered fires, the solver has already bounced the fish off
+## whatever it hit, so this is the only record of which way it was going.
+var _approach_velocity := Vector3.ZERO
+
 var _wiggle_phase := 0.0
 var _wiggle_amount := 0.0
 var _flash_left := 0.0
@@ -183,13 +255,15 @@ static func spawn(fish_instance: FishInstance) -> BattleFish:
 	return battler
 
 func _ready() -> void:
+	add_to_group(GROUP)
 	_flop_timer = _roll_flop_delay()
 	body_entered.connect(_on_body_entered)
 	_apply_fish()
 
-## Puts `fish_instance` in this body. The fish enters the arena at full health,
-## the way gamephase sends a champion in; set current_health afterwards if a
-## fight is being resumed rather than started.
+## Puts `fish_instance` in this body. The fish enters the arena at full health
+## and with every spell off cooldown, the way gamephase sends a champion in;
+## set current_health afterwards if a fight is being resumed rather than
+## started.
 func bind_fish(fish_instance: FishInstance) -> void:
 	if fish != null and fish.died.is_connected(_on_fish_died):
 		fish.died.disconnect(_on_fish_died)
@@ -197,11 +271,28 @@ func bind_fish(fish_instance: FishInstance) -> void:
 	_dead = false
 	if fish != null:
 		fish.reset_health()
+		fish.reset_spells()
 		fish.died.connect(_on_fish_died)
+	_clear_dot()
+	_stun_left = 0.0
+	_read_passives()
 	# bind_fish() is usually called before the body is in the tree, so the
 	# @onready nodes are not there yet - _ready() picks the work back up.
 	if is_node_ready():
 		_apply_fish()
+
+## Picks up the spells that are never cast, only carried. Done once per fish
+## rather than per hop: a passive cannot come or go in the middle of a fight.
+func _read_passives() -> void:
+	_coward = null
+	if fish == null:
+		return
+	for spell in fish.spells:
+		if spell == null:
+			continue
+		var coward := spell.data as CowardSpellData
+		if coward != null:
+			_coward = coward
 
 ## Reads the size, weight and icon off the fish and builds the body out of them.
 func _apply_fish() -> void:
@@ -243,6 +334,12 @@ func _sprite_height(length: float) -> float:
 		return length
 	return length * float(texture.get_height()) / float(texture.get_width())
 
+## The way the fish is drawn facing, as a direction along the floor. Sprites in
+## this game face the camera and are flipped rather than turned, so which way a
+## fish is pointing is a bool and this is the only "in front of it" there is.
+func facing() -> Vector3:
+	return Vector3.LEFT if _sprite != null and _sprite.flip_h else Vector3.RIGHT
+
 ## How long this fish is in world units, nose to tail. Same curve as the held
 ## viewmodel, scaled up: the arena is looked at rather than glanced down at, so
 ## the fish in it are bigger than the one in the hand.
@@ -253,12 +350,19 @@ func world_length() -> float:
 
 # -- Stats --------------------------------------------------------------------
 
-## Damage this fish deals on contact.
+## Damage this fish deals on contact. A coward deals a share of it - none, by
+## default: it will not fight, and that is the price of the spell. The fish's
+## own phys_dmg is left alone, so what a spell scaling off it does is unchanged
+## and the selection screen still reports the catch honestly.
 func phys_dmg() -> int:
-	return fish.phys_dmg if fish != null else 0
+	if fish == null:
+		return 0
+	if _coward != null:
+		return int(round(fish.phys_dmg * _coward.phys_scale))
+	return fish.phys_dmg
 
-## Damage this fish's spells scale off. Nothing casts yet; SpellInstance takes
-## the FishInstance itself and picks this or phys_dmg depending on the type.
+## Damage this fish's spells scale off. SpellInstance takes the FishInstance
+## itself and picks this or phys_dmg depending on the spell's type.
 func magic_dmg() -> int:
 	return fish.magic_dmg if fish != null else 0
 
@@ -269,9 +373,46 @@ func is_alive() -> bool:
 func health_ratio() -> float:
 	return fish.health_ratio() if fish != null else 0.0
 
-## Takes `amount` off the bound fish and returns what it actually lost. Every
-## source of damage goes through here - a touch today, a spell once they exist.
+## Takes `amount` off the bound fish and returns what it actually lost. This is
+## the way every touch gets applied; the shove is away from the fish that landed
+## it.
 func take_damage(amount: int, from: BattleFish = null) -> int:
+	var origin := from.global_position if from != null and is_instance_valid(from) else NO_ORIGIN
+	return _apply_damage(amount, from, origin, 1.0)
+
+## Drives this fish into the floor and takes health off it. The shove is
+## straight down rather than away from anything, and the damage itself carries
+## NO_ORIGIN so that nothing pushes it sideways as well - the whole point is
+## that it goes down.
+##
+## A fish already on the floor simply takes the damage: the impulse has nowhere
+## to put it.
+func slam_down(amount: int, slam_scale: float, from: BattleFish = null) -> int:
+	if not is_alive():
+		return 0
+	var dealt := _apply_damage(amount, from, NO_ORIGIN, 0.0)
+	_shove(Vector3.DOWN, amount, slam_scale, 0.0)
+	return dealt
+
+## Damage that comes from nowhere the fish can be pushed away from - a tick of
+## something it is already under. `from` is still credited with it, so a health
+## bar and a battle log can name whoever started it, but the fish is not shoved:
+## there is no direction for a tick of damage to have come from.
+func take_tick_damage(amount: int, from: BattleFish = null) -> int:
+	return _apply_damage(amount, from, NO_ORIGIN, 0.0)
+
+## Damage from a point in the world rather than from a fish - a spell's blast.
+## The shove is outwards from `origin`, so everything caught is thrown away from
+## the explosion instead of away from whoever set it off, and `knockback_scale`
+## is how much harder than a touch of the same size it throws.
+func take_blast(amount: int, origin: Vector3, knockback_scale: float = 1.0,
+		from: BattleFish = null) -> int:
+	return _apply_damage(amount, from, origin, knockback_scale)
+
+## The one place health actually comes off. `origin` is what the fish is shoved
+## away from, NO_ORIGIN for damage that should not move it at all.
+func _apply_damage(amount: int, from: BattleFish, origin: Vector3,
+		knockback_scale: float) -> int:
 	if not is_alive():
 		return 0
 	var dealt := fish.take_damage(amount)
@@ -280,26 +421,40 @@ func take_damage(amount: int, from: BattleFish = null) -> int:
 		# Knocked back by the size of the hit, not by the health it managed to
 		# take off: a killing blow shoves just as hard when the fish had one
 		# point left as when it had all of them.
-		_knock_back(amount, from)
+		_knock_back(amount, origin, knockback_scale)
 		took_damage.emit(dealt, from)
 	return dealt
 
-## Shoves this fish away from whatever hit it, harder the more the hit was
-## worth. Damage that came from nowhere in particular - a spell with no caster
-## given - leaves it where it stands rather than picking a direction on its own.
+## Shoves this fish away from `origin`, harder the more the hit was worth.
+## Damage that came from nowhere in particular - NO_ORIGIN, a spell with no
+## caster given - leaves it where it stands rather than picking a direction on
+## its own.
 ##
 ## A killing blow still lands one: the fish is already dead by the time this
 ## runs, and being knocked over by the hit that did it is exactly right.
-func _knock_back(amount: int, from: BattleFish) -> void:
-	if from == null or not is_instance_valid(from):
+func _knock_back(amount: int, origin: Vector3, scale: float) -> void:
+	if origin == NO_ORIGIN:
 		return
-	var away := global_position - from.global_position
+	var away := global_position - origin
 	away.y = 0.0
 	# Dead centre on top of each other: any direction will do.
 	away = away.normalized() if away.length_squared() > 0.0001 else _random_horizontal()
-	var direction := (away + Vector3.UP * KNOCKBACK_LIFT).normalized()
-	var impulse := direction * float(amount) * KNOCKBACK_PER_DAMAGE
-	apply_central_impulse(impulse.limit_length(mass * KNOCKBACK_MAX_SPEED))
+	_shove(away, amount, scale)
+
+## The impulse itself, along a direction already settled on. `amount` is the
+## damage the shove is worth, `scale` how much harder than a touch it throws,
+## and `lift` how much of it is aimed upwards - the default skips a fish back
+## off the floor, and 0 is for a shove that is meant to go where it is pointed,
+## like a slam into the ground.
+func _shove(direction: Vector3, amount: int, scale: float,
+		lift := KNOCKBACK_LIFT) -> void:
+	if scale <= 0.0 or direction.is_zero_approx():
+		return
+	var lifted := (direction + Vector3.UP * lift).normalized()
+	var impulse := lifted * float(amount) * KNOCKBACK_PER_DAMAGE * scale
+	# The cap scales too: a blast that throws twice as hard as a touch would
+	# otherwise hand the difference straight back at the ceiling.
+	apply_central_impulse(impulse.limit_length(mass * KNOCKBACK_MAX_SPEED * scale))
 
 ## Whether this fish is allowed to hurt `other`: not itself, not a team mate,
 ## and both of them still fighting.
@@ -316,8 +471,20 @@ func can_hit(other: BattleFish) -> bool:
 
 func _physics_process(delta: float) -> void:
 	_tick_hit_cooldowns(delta)
+	_tick_stun(delta)
+	_tick_dot(delta)
+	if fish != null and is_alive():
+		fish.tick_spells(delta)
+	_tick_volley(delta)
 	_tick_flop(delta)
+	_tick_peak()
+	_tick_overhead()
+	_tick_ready_spells()
 	_tick_look(delta)
+	# Last thing in the frame, so it is the velocity going into the step the
+	# next contact will come out of, and so _tick_peak() above still had the
+	# frame before to compare against. See _approach_velocity.
+	_approach_velocity = linear_velocity
 
 func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 	# Cheapest honest answer to "is it standing on something". Flopping off
@@ -340,7 +507,7 @@ func _tick_hit_cooldowns(delta: float) -> void:
 ## something solid, so a fish that is still bouncing flops the moment it lands
 ## instead of throwing itself around from nothing.
 func _tick_flop(delta: float) -> void:
-	if not is_alive():
+	if not is_alive() or _hang_left > 0.0 or is_stunned():
 		return
 	_flop_timer -= delta
 	if _flop_timer > 0.0 or not _grounded:
@@ -361,21 +528,37 @@ func _flop() -> void:
 	_wiggle_amount = 1.0
 
 ## A random direction along the floor, pulled towards chase_target by however
-## much of chase_bias the distance leaves in play.
+## much of chase_bias the distance leaves in play - or away from the nearest
+## fish instead, by flee_bias, when this one is a coward.
 func _flop_direction() -> Vector3:
 	var wander := _random_horizontal()
-	if chase_target == null or not is_instance_valid(chase_target) or chase_bias <= 0.0:
+	var bias := chase_bias
+	var focus: Node3D = chase_target
+	if _coward != null:
+		# A coward runs from whoever is actually closest rather than from
+		# whoever the arena pointed it at - the thing about to catch it is the
+		# thing worth running from.
+		bias = _coward.flee_bias
+		var nearest := _nearest_enemy()
+		if nearest != null:
+			focus = nearest
+	if focus == null or not is_instance_valid(focus) or bias <= 0.0:
 		return wander
-	var towards := chase_target.global_position - global_position
+	var towards := focus.global_position - global_position
 	towards.y = 0.0
 	var distance := towards.length()
 	if distance < 0.0001:
 		return wander
-	var bias := chase_bias * _chase_strength(distance)
-	return wander.lerp(towards / distance, bias).normalized()
+	# The same heading either way round: a coward is a chaser with a minus sign.
+	var heading := towards / distance
+	if _coward != null:
+		heading = -heading
+	return wander.lerp(heading, bias * _chase_strength(distance)).normalized()
 
-## How much of chase_bias survives at `distance`: all of it up close, falling
-## off to CHASE_FAR_SCALE of it once the other fish is right across the floor.
+## How much of chase_bias - or of a coward's flee_bias - survives at `distance`:
+## all of it up close, falling off to CHASE_FAR_SCALE of it once the other fish
+## is right across the floor. A fish only commits, to either running at
+## something or away from it, once that something is near.
 func _chase_strength(distance: float) -> float:
 	var closeness := clampf(inverse_lerp(CHASE_FAR, CHASE_NEAR, distance), 0.0, 1.0)
 	return lerpf(CHASE_FAR_SCALE, 1.0, closeness)
@@ -404,6 +587,11 @@ func _tick_look(delta: float) -> void:
 	if _flash_left > 0.0:
 		_flash_left = maxf(0.0, _flash_left - delta)
 		_sprite.modulate = tint.lerp(HIT_COLOR, _flash_left / HIT_FLASH)
+	elif is_stunned():
+		# Washed out, the way anything looks after a camera has gone off in it.
+		_sprite.modulate = tint.lerp(STUN_COLOR, STUN_TINT_MIX)
+	else:
+		_sprite.modulate = tint
 
 	# Flipped rather than turned: turning a flat sprite edge-on makes it vanish.
 	if absf(linear_velocity.x) > 0.15:
@@ -434,23 +622,430 @@ func _sprite_roll() -> float:
 # -- Contact ------------------------------------------------------------------
 
 func _on_body_entered(body: Node) -> void:
+	# `other` is null for scenery - a wall, or the floor at the end of a flop.
+	# There is nothing to trade damage with then, but a spell that goes off on
+	# contact does not care what it was that got touched.
 	var other := body as BattleFish
-	if other == null:
-		return
-	_hit(other)
+	var landed := _hit(other) if other != null else false
+	_cast_on_hit(other, landed)
 
 ## Lands a touch on `other`. Both bodies run this on their own side of the
-## collision, so a head-on flop trades damage both ways.
-func _hit(other: BattleFish) -> void:
-	if not can_hit(other):
-		return
+## collision, so a head-on flop trades damage both ways. A touch that is not
+## allowed to hurt anything - a team mate, a fish already dead - still counts as
+## a contact for a spell: that is decided in _on_body_entered(), not here.
+## Returns whether the touch landed - past the team check and past the
+## per-target cooldown - which is what a spell that has to have hit something
+## waits for.
+##
+## Landing it is not the same as hurting with it: a coward connects and deals
+## nothing, and a spell it carries that goes off on a hit should still go off.
+## Only the damage is nullified, not the fish's ability to touch anything.
+func _hit(other: BattleFish) -> bool:
+	# A stunned fish is not hitting anything, though anything may hit it: the
+	# other side of this collision runs its own _hit() and is unaffected.
+	if is_stunned() or not can_hit(other):
+		return false
 	var id := other.get_instance_id()
 	if _hit_cooldowns.has(id):
-		return
+		return false
 	_hit_cooldowns[id] = HIT_COOLDOWN
 	var dealt := other.take_damage(phys_dmg(), self)
 	if dealt > 0:
 		dealt_damage.emit(other, dealt)
+	return true
+
+# -- Spells -------------------------------------------------------------------
+
+## Spends every armed ON_HIT spell on the contact just made. `other` is the fish
+## that was touched, or null for a wall or the floor, and `landed` says whether
+## the touch got past the team check and the per-target cooldown and actually
+## took health off.
+##
+## Anything the fish runs into sets an ON_HIT spell off, which is what keeps a
+## fish with a blast going up on walls - unless the spell sets needs_hit, in
+## which case scenery and touches that did not land are no good to it. Each
+## spell is gated by its own cooldown and nothing else, so a fish carrying two
+## of them gets both on the same touch.
+func _cast_on_hit(other: BattleFish, landed: bool) -> void:
+	if fish == null or not is_alive() or is_stunned():
+		return
+	for spell in fish.ready_spells(SpellData.Trigger.ON_HIT):
+		if spell.data.needs_hit and not landed:
+			continue
+		var damage := spell.try_cast(fish)
+		if damage == SpellInstance.NOT_READY:
+			continue
+		cast_spell.emit(spell.data, other)
+		_apply_on_hit(spell.data, other, damage)
+
+## What an ON_HIT spell does once it has been paid for. A new one branches here
+## on its own data type rather than dressing itself up as one of these.
+func _apply_on_hit(data: SpellData, other: BattleFish, damage: int) -> void:
+	var blast := data as ExplosionSpellData
+	if blast != null:
+		_explode(blast, _contact_point(other), damage)
+		return
+	var dot := data as DotSpellData
+	# needs_hit is what guarantees there is an `other` here at all.
+	if dot != null and other != null and is_instance_valid(other):
+		other.apply_dot(dot, damage, self)
+
+# -- Stun ---------------------------------------------------------------------
+
+## Puts this fish out of action for `seconds`. The longest stun wins rather than
+## them adding up, so a flash from across the room cannot extend one that landed
+## point blank.
+func stun(seconds: float) -> void:
+	if not is_alive() or seconds <= 0.0:
+		return
+	_stun_left = maxf(_stun_left, seconds)
+	# Whatever it was in the middle of, it is not any more.
+	_end_hang()
+	stunned.emit(_stun_left)
+
+func is_stunned() -> bool:
+	return _stun_left > 0.0
+
+## Seconds of it left, for a readout.
+func stun_left() -> float:
+	return _stun_left
+
+func _tick_stun(delta: float) -> void:
+	if _stun_left > 0.0:
+		_stun_left = maxf(0.0, _stun_left - delta)
+
+# -- Damage over time ---------------------------------------------------------
+
+## Puts `spell` on this fish, or multiplies what is already on it. The number of
+## ticks left is set by the first application and never topped up: landing it
+## again makes the effect hurt more, not last longer.
+func apply_dot(spell: DotSpellData, damage: int, from: BattleFish) -> void:
+	if spell == null or not is_alive():
+		return
+	if _dot != null and _dot_ticks > 0:
+		_dot_damage = int(round(_dot_damage * spell.stack_multiplier))
+	else:
+		_dot = spell
+		_dot_damage = damage
+		_dot_ticks = spell.tick_count()
+		_dot_timer = maxf(spell.interval, 0.01)
+	_dot_source = from
+
+## Counts the effect down and takes health off on the beat. Whoever applied it
+## is credited with every tick, so a fish that walked away still shows up in the
+## log as the one doing the damage.
+func _tick_dot(delta: float) -> void:
+	if _dot == null or _dot_ticks <= 0:
+		return
+	if not is_alive():
+		_clear_dot()
+		return
+	var interval := maxf(_dot.interval, 0.01)
+	_dot_timer -= delta
+	while _dot_ticks > 0 and _dot_timer <= 0.0:
+		_dot_ticks -= 1
+		_dot_timer += interval
+		var dealt := take_tick_damage(_dot_damage, _dot_source)
+		if dealt > 0 and _dot_source != null and is_instance_valid(_dot_source):
+			_dot_source.report_indirect_damage(self, dealt)
+		# The tick that kills clears the effect on its way out - see
+		# _on_fish_died - and there is nothing left to count down.
+		if not is_alive():
+			return
+	if _dot_ticks <= 0:
+		_clear_dot()
+
+func _clear_dot() -> void:
+	_dot = null
+	_dot_damage = 0
+	_dot_ticks = 0
+	_dot_timer = 0.0
+	_dot_source = null
+
+## Ticks left of whatever this fish is under, and what one of them costs. For a
+## readout - the test arena puts them on the fighter card - nothing in the fight
+## itself reads them.
+func dot_ticks_left() -> int:
+	return _dot_ticks
+
+func dot_damage() -> int:
+	return _dot_damage
+
+## Told to the fish that started a damage-over-time effect when one of its ticks
+## lands, so damage it did not have to be present for is still reported as its
+## own. Nothing else should be reaching for another fish's signals.
+func report_indirect_damage(target: BattleFish, amount: int) -> void:
+	if amount > 0:
+		dealt_damage.emit(target, amount)
+
+## Spots the top of a hop: rising the frame before, no longer rising now, and
+## nothing underfoot. That is the moment a spell waiting on AT_JUMP_PEAK gets.
+func _tick_peak() -> void:
+	if _grounded or _hang_left > 0.0 or not is_alive() or is_stunned():
+		return
+	if _approach_velocity.y <= PEAK_RISE or linear_velocity.y > 0.0:
+		return
+	_cast_at_peak()
+
+## Fires anything that simply goes off the moment it is ready - no moment to
+## catch, no condition to meet, nothing to aim at. The cooldown is all of it.
+func _tick_ready_spells() -> void:
+	if fish == null or not is_alive() or is_stunned() or _hang_left > 0.0:
+		return
+	for spell in fish.ready_spells(SpellData.Trigger.WHEN_READY):
+		var camera := spell.data as PaparazziSpellData
+		if camera == null:
+			continue
+		if spell.try_cast(fish) == SpellInstance.NOT_READY:
+			continue
+		# No target: the camera goes off whether or not anybody is in the shot.
+		cast_spell.emit(spell.data, null)
+		_flash(camera)
+
+## Sets a camera off in front of the fish and leaves standing anything it may
+## hit that was caught in the cone - the closer it was, the longer for.
+func _flash(spell: PaparazziSpellData) -> void:
+	var direction := _flash_direction(spell)
+	SpellFlash.burst(_effect_parent(),
+		global_position + direction * world_length() * 0.5, spell)
+	for node in get_tree().get_nodes_in_group(GROUP):
+		var other := node as BattleFish
+		if other == null or not can_hit(other):
+			continue
+		var offset := other.global_position - global_position
+		offset.y = 0.0
+		var distance := offset.length()
+		if distance > spell.max_range:
+			continue
+		# Point blank: whatever is against the lens is in the shot, whichever
+		# way round the two of them are.
+		if distance > 0.0001 \
+				and rad_to_deg(direction.angle_to(offset / distance)) > spell.spread_degrees:
+			continue
+		other.stun(spell.stun_for(distance))
+
+## Where the camera gets pointed: at the nearest fish worth photographing when
+## one is in range, and straight ahead when there is not.
+##
+## A fish in this game is always drawn facing the camera and flipped rather than
+## turned, so its "forwards" is only ever the way it was last thrown - which is
+## hardly ever at its opponent. Fired strictly down that line the spell barely
+## existed: 50 flashes over 120 seconds of arena landed **one** stun. Turning to
+## face the subject is what a photographer does anyway, and the cone still
+## decides who else is in the shot.
+func _flash_direction(spell: PaparazziSpellData) -> Vector3:
+	var subject := _nearest_enemy()
+	if subject == null:
+		return facing()
+	var aim := subject.global_position - global_position
+	aim.y = 0.0
+	if aim.length() > spell.max_range or aim.length_squared() < 0.0001:
+		return facing()
+	return aim.normalized()
+
+## Fires a spell that waits for this fish to be standing over somebody. Unlike
+## the peak, which is a moment and gone, this is a condition: it is true for as
+## long as the other fish is under this one, so the spell's own cooldown is the
+## only thing pacing it.
+func _tick_overhead() -> void:
+	if fish == null or not is_alive() or _hang_left > 0.0 or is_stunned():
+		return
+	var ready := fish.ready_spells(SpellData.Trigger.WHEN_OVER_TARGET)
+	if ready.is_empty():
+		return
+	var spell := ready[0]
+	var slam := spell.data as SlamSpellData
+	if slam == null:
+		return
+	var target := _target_below(slam)
+	if target == null:
+		return
+	var damage := spell.try_cast(fish)
+	if damage == SpellInstance.NOT_READY:
+		return
+	cast_spell.emit(spell.data, target)
+	var dealt := target.slam_down(damage, slam.slam_scale, self)
+	if dealt > 0:
+		dealt_damage.emit(target, dealt)
+
+## The nearest fish this one may hit that is underneath it: within `reach` to
+## either side and at least `min_drop` below. Null when it is standing over
+## nobody, which is most of the time.
+func _target_below(spell: SlamSpellData) -> BattleFish:
+	var best: BattleFish = null
+	var best_distance := INF
+	for node in get_tree().get_nodes_in_group(GROUP):
+		var other := node as BattleFish
+		if other == null or not can_hit(other):
+			continue
+		var offset := global_position - other.global_position
+		if offset.y < spell.min_drop:
+			continue
+		var flat := Vector2(offset.x, offset.z).length()
+		if flat > spell.reach or flat >= best_distance:
+			continue
+		best_distance = flat
+		best = other
+	return best
+
+## Spends a spell that was waiting for the top of a hop. Nothing to shoot at
+## means the charge is kept rather than spent on the scenery - unlike an ON_HIT
+## spell, this one is aimed, so firing it at nobody would just waste it.
+func _cast_at_peak() -> void:
+	if fish == null:
+		return
+	# The first one only: a volley takes the fish over, so a second spell
+	# waiting on the peak has to wait for the next hop.
+	var ready := fish.ready_spells(SpellData.Trigger.AT_JUMP_PEAK)
+	if ready.is_empty():
+		return
+	var spell := ready[0]
+	var volley := spell.data as BubbleSpellData
+	if volley == null:
+		return
+	var target := _nearest_enemy()
+	if target == null:
+		return
+	var damage := spell.try_cast(fish)
+	if damage == SpellInstance.NOT_READY:
+		return
+	cast_spell.emit(spell.data, target)
+	_start_volley(volley, damage, target)
+
+## Stops the fish dead at the top of its hop and starts the bubbles coming. The
+## body is frozen rather than slowed: a fish still drifting upwards while it
+## fires reads as one that got interrupted, not one taking aim.
+func _start_volley(spell: BubbleSpellData, damage: int, target: BattleFish) -> void:
+	_volley = spell
+	_volley_target = target
+	_volley_damage = damage
+	_volley_shots = spell.count
+	_volley_timer = 0.0
+	_hang_left = maxf(spell.hang_time, 0.01)
+	linear_velocity = Vector3.ZERO
+	angular_velocity = Vector3.ZERO
+	freeze = true
+
+## Runs a volley that is already going: one bubble every `interval`, and the
+## fish let go again once `hang_time` is up. A fish that dies in mid-volley
+## drops the rest of it and falls.
+func _tick_volley(delta: float) -> void:
+	if _hang_left <= 0.0:
+		return
+	if not is_alive() or _volley == null:
+		_end_hang()
+		return
+	_hang_left = maxf(0.0, _hang_left - delta)
+	_volley_timer -= delta
+	# maxf: an interval of 0 would otherwise never let the loop end.
+	var interval := maxf(_volley.interval, 0.01)
+	while _volley_shots > 0 and _volley_timer <= 0.0:
+		_fire_bubble()
+		_volley_shots -= 1
+		_volley_timer += interval
+	if _hang_left <= 0.0:
+		_end_hang()
+
+## Hands the fish back to gravity and drops whatever was left of the volley.
+func _end_hang() -> void:
+	_hang_left = 0.0
+	_volley = null
+	_volley_target = null
+	_volley_shots = 0
+	if freeze:
+		freeze = false
+
+## One bubble, aimed at wherever the target is standing at this instant. It is
+## fired and forgotten - the bubble does not follow the fish it was aimed at,
+## which is the whole reason a volley can be dodged.
+func _fire_bubble() -> void:
+	var target := _volley_target
+	if target == null or not is_instance_valid(target) or not target.is_alive():
+		return
+	var direction := target.global_position - global_position
+	if direction.is_zero_approx():
+		return
+	direction = direction.normalized()
+	# Out at the nose rather than at the middle of the fish, so the bubbles look
+	# spat rather than dropped.
+	var bubble := SpellBubble.fire(_effect_parent(),
+		global_position + direction * world_length() * 0.5,
+		direction, _volley, _volley_damage, self)
+	if bubble != null:
+		bubble.hit_fish.connect(_on_bubble_hit)
+
+## A bubble landing is this fish landing a hit, as far as anything watching is
+## concerned.
+func _on_bubble_hit(target: BattleFish, amount: int) -> void:
+	dealt_damage.emit(target, amount)
+
+## The closest fish this one is allowed to hit, or null when there is nobody
+## left to aim at.
+func _nearest_enemy() -> BattleFish:
+	var best: BattleFish = null
+	var best_distance := INF
+	for node in get_tree().get_nodes_in_group(GROUP):
+		var other := node as BattleFish
+		if other == null or not can_hit(other):
+			continue
+		var distance := global_position.distance_squared_to(other.global_position)
+		if distance < best_distance:
+			best_distance = distance
+			best = other
+	return best
+
+## Throws the fish that set the blast off back the way it came. It takes none of
+## the blast's damage - can_hit() rules itself out - but an explosion under its
+## own nose that left it standing there would read as somebody else's.
+func _recoil(spell: ExplosionSpellData, origin: Vector3, damage: int) -> void:
+	_shove(_recoil_direction(origin), damage,
+		spell.knockback_at(0.0) * spell.self_knockback)
+
+## Back the way the fish was travelling when it hit, which is the one direction
+## that works for a wall as well as for another fish. Straight out of the blast
+## if it was barely moving, and anywhere at all if it is sitting on top of it.
+func _recoil_direction(origin: Vector3) -> Vector3:
+	var approach := _approach_velocity
+	approach.y = 0.0
+	if approach.length_squared() > 0.01:
+		return -approach.normalized()
+	var away := global_position - origin
+	away.y = 0.0
+	return away.normalized() if away.length_squared() > 0.0001 else _random_horizontal()
+
+## Blows up at `origin`: every fish this one is allowed to hit and that stands
+## inside the spell's radius takes the full damage, thrown outwards by however
+## close to the middle of it it was. The caster is not hurt by its own blast -
+## can_hit() rules out itself and its team - only thrown by it.
+func _explode(spell: ExplosionSpellData, origin: Vector3, damage: int) -> void:
+	SpellExplosion.burst(_effect_parent(), origin, spell)
+	_recoil(spell, origin, damage)
+	for node in get_tree().get_nodes_in_group(GROUP):
+		var target := node as BattleFish
+		if target == null or not can_hit(target):
+			continue
+		var distance := target.global_position.distance_to(origin)
+		if distance > spell.radius:
+			continue
+		var dealt := target.take_blast(damage, origin, spell.knockback_at(distance), self)
+		if dealt > 0:
+			dealt_damage.emit(target, dealt)
+
+## Near enough to where a contact happened: halfway between the two fish, or the
+## fish itself when it ran into scenery. The solver knows the real contact point
+## but body_entered is not handed it, and half a fish either way is nothing next
+## to a blast three units across.
+func _contact_point(other: BattleFish) -> Vector3:
+	if other == null or not is_instance_valid(other):
+		return global_position
+	return (global_position + other.global_position) * 0.5
+
+## Where effects that happen in the world are parented - alongside this fish
+## rather than under it, so a blast stays where it went off and outlives the
+## fish that set it off.
+func _effect_parent() -> Node3D:
+	var parent := get_parent() as Node3D
+	return parent if parent != null else self
 
 # -- Death --------------------------------------------------------------------
 
@@ -459,6 +1054,9 @@ func _on_fish_died() -> void:
 		return
 	_dead = true
 	_hit_cooldowns.clear()
+	_clear_dot()
+	# Frozen in mid-air firing bubbles when it died: let it drop.
+	_end_hang()
 	# It stops flopping and turns belly up - _sprite_roll() handles the turn -
 	# but keeps its physics so it drops and settles instead of freezing in
 	# mid-air. The arena frees it when it wants.

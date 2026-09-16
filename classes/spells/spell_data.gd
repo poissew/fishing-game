@@ -8,9 +8,46 @@ extends Resource
 ## values flatten the gap between a weak and a strong caster.
 const POWER_SCALE := 10.0
 
+## What makes a spell go off.
+##
+## **Only ever append to this.** Godot writes an enum into a .tres as the plain
+## int, so slipping a new trigger in among the existing ones silently re-points
+## every resource after it - the first draft of WHEN_READY went in above
+## WHEN_OVER_TARGET and turned Ground Slam into a spell that waited for a moment
+## no one ever handed it.
+enum Trigger {
+	## Fired by whatever is driving the fight, whenever it decides to.
+	MANUAL,
+	## Armed the moment it comes off cooldown, and spent on the caster's next
+	## contact of any kind - the fish does not aim it, it just goes off.
+	ON_HIT,
+	## Held until the fish is at the top of a hop with nothing underneath it.
+	## What it does there is the spell's own business; BattleFish only spots
+	## the peak and hands the cast over.
+	AT_JUMP_PEAK,
+	## Never cast at all. It is read off the fish and changes how the fish
+	## behaves for as long as it is carried, so cooldown and damage mean
+	## nothing to it.
+	PASSIVE,
+	## Held until there is a fish underneath the caster. A condition rather
+	## than a moment: BattleFish looks for one every frame and hands the cast
+	## over whenever it finds one, so the cooldown is all that paces it.
+	WHEN_OVER_TARGET,
+	## Goes off the moment it is off cooldown, with nothing to wait for and
+	## nothing to aim at. The cooldown is the whole of the pacing.
+	WHEN_READY,
+}
+
 @export_category("Base Data")
 @export var name: String
 @export_multiline var description: String
+## When the battler should cast this. See Trigger.
+@export var trigger: Trigger = Trigger.MANUAL
+## ON_HIT only. False - the default - and the spell goes off on any contact at
+## all, a wall or the floor included, which is what a fish that simply explodes
+## wants. True and it waits for a touch that actually landed damage on an enemy,
+## which is what anything that has to have something to do *to* needs.
+@export var needs_hit: bool = false
 
 @export_category("Combat")
 ## Base damage before the caster's phys_dmg / magic_dmg is applied.

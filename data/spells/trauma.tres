@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="DotSpellData" format=3]
+
+[ext_resource type="Script" path="res://classes/spells/dot_spell_data.gd" id="1_trma"]
+
+[resource]
+script = ExtResource("1_trma")
+name = "Trauma"
+description = "Whatever this one hits does not stop hurting. Four seconds of it, and every touch it lands before that is up doubles what the last one was worth."
+trigger = 1
+needs_hit = true
+base_power = 0
+base_type = 5
+base_cooldown = 0
+damage_scale = 0.5
+interval = 1.0
+duration = 4.0
+stack_multiplier = 2.0

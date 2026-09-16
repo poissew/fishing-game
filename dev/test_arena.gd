@@ -8,8 +8,14 @@ extends Node3D
 ## It is the same 480x270 SubViewport the game renders through, so the fish and
 ## the readout pixelate exactly as they would in the real arena.
 ##
+## The round itself - the clock, sudden death, and which fish is handed the win -
+## is BattleRound, which is game code and not part of this scene. This just
+## starts one per pair and listens.
+##
 ##   R / Enter - fresh pair of fighters
 ##   1 / 2     - rematch the same two, healed up
+##   E         - rematch with both of them given the next spell in the pool,
+##               and every spell at once on the last press
 ##   Escape    - hand the mouse back, then quit
 ##
 ## The camera keys are listed in free_camera.gd, which does the flying; the
@@ -24,6 +30,10 @@ const SPECIES := [
 	preload("res://data/items/fish/catfish.tres"),
 	preload("res://data/items/fish/shark.tres"),
 ]
+
+## Handed to both fighters by the E key, so a spell can be watched without
+## waiting for one to roll on a fish.
+const TEST_SPELLS := FishData.SPELL_POOL
 
 ## One colour per side, so the two fighters are told apart at a glance even in
 ## a rematch. The fish keep their own icon; this only tints it.
@@ -46,10 +56,21 @@ const SPAWN_Y := 1.2
 
 ## The two fighters, in team order. The HUD reads this.
 var battlers: Array[BattleFish] = []
-## Set when one of them dies, and read by the HUD for the banner.
+## Set when the round is decided, and read by the HUD for the banner.
 var winner: BattleFish = null
+## The clock this round is running on. The HUD reads it for the countdown.
+var round_clock: BattleRound = null
+## Which spell the E key hands out next: an index into TEST_SPELLS, or the size
+## of it for "all of them at once".
+var armed_index := 0
 
 func _ready() -> void:
+	round_clock = BattleRound.new()
+	round_clock.name = "BattleRound"
+	add_child(round_clock)
+	round_clock.time_up.connect(_on_time_up)
+	round_clock.drained.connect(_on_drained)
+	round_clock.finished.connect(_on_round_finished)
 	_hud.bind_arena(self)
 	start_round()
 
@@ -74,6 +95,34 @@ func rematch() -> void:
 	_spawn_pair([battlers[0].fish, battlers[1].fish])
 	_hud.log_line("rematch")
 
+## Rematch with both fish carrying a spell they did not roll. One spell at a
+## time, stepping to the next on each press and finishing on the whole pool:
+## handing both fish everything at once includes Coward, and two cowards spend
+## the round running away from each other.
+func armed_rematch() -> void:
+	if battlers.size() < 2:
+		start_round()
+	var handed: Array[SpellData] = []
+	if armed_index >= TEST_SPELLS.size():
+		handed.assign(TEST_SPELLS)
+	else:
+		handed.append(TEST_SPELLS[armed_index])
+	armed_index = (armed_index + 1) % (TEST_SPELLS.size() + 1)
+
+	for battler in battlers:
+		var spells: Array[SpellInstance] = []
+		for spell_data in handed:
+			spells.append(SpellInstance.create_spell_instance(spell_data))
+		battler.fish.spells = spells
+	_spawn_pair([battlers[0].fish, battlers[1].fish])
+	_hud.log_line("armed: %s" % _spell_names(handed))
+
+func _spell_names(spells: Array[SpellData]) -> String:
+	var names := PackedStringArray()
+	for spell in spells:
+		names.append(spell.name)
+	return ", ".join(names)
+
 func _spawn_pair(fish: Array) -> void:
 	for child in _fighters.get_children():
 		child.queue_free()
@@ -87,6 +136,8 @@ func _spawn_pair(fish: Array) -> void:
 		battler.tint = TEAM_TINTS[i]
 		battler.position = Vector3(SPAWN_X if i == 1 else -SPAWN_X, SPAWN_Y, 0.0)
 		battler.dealt_damage.connect(_on_dealt_damage.bind(battler))
+		battler.cast_spell.connect(_on_cast_spell.bind(battler))
+		battler.stunned.connect(_on_stunned.bind(battler))
 		battler.died.connect(_on_battler_died)
 		_fighters.add_child(battler)
 		battlers.append(battler)
@@ -95,6 +146,8 @@ func _spawn_pair(fish: Array) -> void:
 	# size would take all afternoon to bump into each other.
 	battlers[0].chase_target = battlers[1]
 	battlers[1].chase_target = battlers[0]
+
+	round_clock.start(battlers)
 
 ## Two different species, so a round is never a fish against its own twin.
 func _pick_species() -> Array:
@@ -108,14 +161,28 @@ func _on_dealt_damage(target: BattleFish, amount: int, attacker: BattleFish) -> 
 	_hud.log_line("%s hits %s for %d" % [
 		attacker.fish.data.name, target.fish.data.name, amount])
 
+func _on_cast_spell(spell: SpellData, _target: BattleFish, caster: BattleFish) -> void:
+	_hud.log_line("%s casts %s" % [caster.fish.data.name, spell.name])
+
+func _on_stunned(seconds: float, battler: BattleFish) -> void:
+	_hud.log_line("%s is seeing spots for %.1fs" % [battler.fish.data.name, seconds])
+
 func _on_battler_died(battler: BattleFish) -> void:
-	for other in battlers:
-		if other != battler:
-			winner = other
 	# Deferred: `died` comes out of take_damage(), so it beats the attacker's
 	# dealt_damage to the log and the kill would otherwise print above the hit
 	# that caused it.
 	_hud.log_line.call_deferred("%s is done for" % battler.fish.data.name)
+
+func _on_time_up() -> void:
+	_hud.log_line("time up - sudden death")
+
+func _on_drained(amount: int) -> void:
+	_hud.log_line("the arena takes %d" % amount)
+
+## BattleRound decides the winner, here and when a fish simply dies: the arena
+## only has to remember it for the banner.
+func _on_round_finished(round_winner: BattleFish) -> void:
+	winner = round_winner
 
 # -- Input ---------------------------------------------------------------------
 
@@ -137,6 +204,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			start_round()
 		KEY_1, KEY_2:
 			rematch()
+		KEY_E:
+			armed_rematch()
 
 ## Everything the freecam listens for, read here rather than in free_camera.gd.
 ## The camera is inside the SubViewport, which only sees the input its container
