@@ -23,12 +23,13 @@ extends RigidBody3D
 ## The collider is a capsule lying down the length of the fish, sized off the
 ## icon's own aspect, so the hitbox is the shape of the thing on screen.
 ##
-## The sprite does not billboard. Yaw and pitch are locked and roll is free, so
-## the fish always faces +Z and tips end over end in the arena's viewing plane -
-## point the camera down -Z (the direction a camera faces by default) and it
-## reads right. Pitch is locked because a capsule down the fish rolls about its
-## own length far too easily, and a flat sprite doing that is edge-on half the
-## time; _face_the_tumble() copies what is left onto the sprite.
+## The sprite does not billboard. Only yaw is locked, so the fish always faces
+## +Z - point the camera down -Z (the direction a camera faces by default) and
+## it reads right - while pitch and roll are the capsule's own, and it tumbles
+## the way it is thrown. A capsule down the length of a fish log-rolls about
+## that length readily, so the sprite does go thin edge-on a fair part of the
+## time; that is the cost of the hitbox doing the rotating rather than a script,
+## and _face_the_tumble() is what keeps it from ever settling that way.
 
 const SCENE_PATH := "res://objects/BattleFish.tscn"
 const DEFAULT_ICON: Texture2D = preload("res://icon.svg")
@@ -67,8 +68,8 @@ const FLOP_INTERVAL := Vector2(0.30, 0.85)
 ## floor, and a hop that hangs in the air is a hop it cannot flop out of.
 const FLOP_UP   := 2.4
 const FLOP_SIDE := 3.2
-## Angular kick, always the way the hop is going, so a fish tips over its own
-## nose rather than spinning against its travel.
+## Angular kick, always about the axis the hop would roll around, so a fish
+## tumbles the way it is thrown rather than spinning against it.
 const FLOP_SPIN := 7.0
 
 ## Range over which chase_bias fades. Within CHASE_NEAR a fish has its opponent
@@ -84,6 +85,17 @@ const CHASE_FAR_SCALE := 0.4
 ## it to shove with and a shark does not sit there like scenery.
 const MASS_MIN := 0.25
 const MASS_MAX := 6.00
+
+## Ceilings on how fast a fish can move and turn, applied every physics frame.
+##
+## Nothing the fish does to itself gets near these - a flop is about 3 units/s
+## and a hard knockback adds 2.5 - they are there for what the solver does to
+## it. A capsule pinched between the floor and a wall while it spins comes out
+## with energy that came from nowhere, and an unclamped fish rides that over the
+## arena wall and out of the world. The spin cap earns its place twice over: a
+## fish left to itself reached 200 rad/s, which is not a tumble, it is a blur.
+const MAX_SPEED := 7.0
+const MAX_SPIN := 12.0
 
 # -- Combat -------------------------------------------------------------------
 
@@ -311,6 +323,10 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 	# Cheapest honest answer to "is it standing on something". Flopping off
 	# nothing would look like flying.
 	_grounded = state.get_contact_count() > 0
+	# Done here rather than in _physics_process so the cap lands on the same
+	# step the solver blew the speed up on, not the frame after.
+	state.linear_velocity = state.linear_velocity.limit_length(MAX_SPEED)
+	state.angular_velocity = state.angular_velocity.limit_length(MAX_SPIN)
 
 func _tick_hit_cooldowns(delta: float) -> void:
 	for id in _hit_cooldowns.keys():
@@ -335,15 +351,13 @@ func _tick_flop(delta: float) -> void:
 func _flop() -> void:
 	var dir := _flop_direction()
 	apply_central_impulse((Vector3.UP * FLOP_UP + dir * FLOP_SIDE) * mass)
-	# The Z of UP.cross(dir), which is the end-over-end tip of a hop going that
-	# way: throw itself left, go over its own nose to the left. The X of that
-	# cross product would be the fish log-rolling about its own length, which is
-	# a flat sprite turning edge-on, so pitch stays locked and this leaves it
-	# out. A hop straight at or away from the camera tips nothing, and the
-	# wiggle covers that. Only the strength is random - tipping backwards out of
+	# UP cross dir is the axis a body rolling that way turns about, so the fish
+	# tumbles along its hop instead of spinning against it: thrown left it goes
+	# over its own nose to the left, thrown away from the camera it rolls about
+	# its own length. Only the strength is random - tumbling backwards out of
 	# its own throw looks wrong.
-	var tip := Vector3(0.0, 0.0, -dir.x)
-	apply_torque_impulse(tip * randomizer.RNG.randf_range(FLOP_SPIN * 0.4, FLOP_SPIN) * mass)
+	var roll_axis := Vector3.UP.cross(dir)
+	apply_torque_impulse(roll_axis * randomizer.RNG.randf_range(FLOP_SPIN * 0.4, FLOP_SPIN) * mass)
 	_wiggle_amount = 1.0
 
 ## A random direction along the floor, pulled towards chase_target by however

@@ -19,10 +19,10 @@ albedo_color = Color(0.16, 0.22, 0.18, 1)
 size = Vector3(8, 0.4, 5)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_wall_x"]
-size = Vector3(0.4, 4, 5.4)
+size = Vector3(0.4, 6, 5.4)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_wall_z"]
-size = Vector3(8.8, 4, 0.4)
+size = Vector3(8.8, 6, 0.4)
 
 [node name="TestArena" type="Node3D" unique_id=623940107]
 script = ExtResource("1_arena")
@@ -63,19 +63,19 @@ shape = SubResource("BoxShape3D_floor")
 [node name="Walls" type="StaticBody3D" parent="pixel/SubViewport" unique_id=1660752949]
 
 [node name="Left" type="CollisionShape3D" parent="pixel/SubViewport/Walls" unique_id=896477579]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.2, 2, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.2, 3, 0)
 shape = SubResource("BoxShape3D_wall_x")
 
 [node name="Right" type="CollisionShape3D" parent="pixel/SubViewport/Walls" unique_id=1695225175]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.2, 2, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.2, 3, 0)
 shape = SubResource("BoxShape3D_wall_x")
 
 [node name="Back" type="CollisionShape3D" parent="pixel/SubViewport/Walls" unique_id=1371673238]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, -2.7)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3, -2.7)
 shape = SubResource("BoxShape3D_wall_z")
 
 [node name="Front" type="CollisionShape3D" parent="pixel/SubViewport/Walls" unique_id=1063457315]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, 2.7)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3, 2.7)
 shape = SubResource("BoxShape3D_wall_z")
 
 [node name="Fighters" type="Node3D" parent="pixel/SubViewport" unique_id=812507638]
