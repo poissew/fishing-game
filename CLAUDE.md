@@ -73,6 +73,17 @@ FISHING  ──day runs out──>  SELECTION  ──fish picked──>  BATTLE 
 - The champion is not consumed: `send_to_battle()` calls `reset_health()` on it and it stays in the inventory. A fish that comes back dead or beaten is removed from whatever the player was carrying it in (`Player._on_battle_ended`).
 - `daynight.end_day()` runs the rest of the current day out and fires `day_passed`, which is how F3 (second press, at night) reaches the battle without sitting out 20 minutes. `skip_to_day()` still only repositions the clock and does *not* end the day.
 
+### Battle fish
+
+- `BattleFish` (`classes/battle_fish.gd` + `objects/BattleFish.tscn`, `RigidBody3D`) is one fish inside the arena. `BattleFish.spawn(fish_instance)` builds one; `bind_fish()` is what reads a `FishInstance` and turns it into a body — icon → `Sprite3D`, `size` → world height (same clamped `sqrt` curve as the viewmodel), `weight` → `mass`, `phys_dmg` → contact damage, `health` → the pool it fights on.
+- The `FishInstance` stays the source of truth: damage goes through `FishInstance.take_damage()`, so the fish that fought is the same object the player carries home, and `UIFishSelect`/`UIBattle` read the same numbers. `bind_fish()` calls `reset_health()`, so a fish always enters the arena full.
+- **Contact is the attack.** Touching another `BattleFish` deals this fish's `phys_dmg` to it (`body_entered`), and because both bodies see the same collision they trade damage both ways. `HIT_COOLDOWN` per opponent is what stops two fish resting against each other from draining one another every frame. `team` (−1 = free-for-all) decides who is allowed to hit whom.
+- **Spells are not wired up.** `magic_dmg()` is exposed and the spell list rides on the `FishInstance`; when spells land they roll through `SpellInstance.try_cast(fish)` and feed the result into the same `take_damage()` a touch uses.
+- Flopping is a hop on a random timer (`FLOP_INTERVAL`), only while the body is touching something, so a fish never flops off thin air. `chase_target` / `chase_bias` steer the hop towards an opponent; leave the target null and it wanders. Bounce comes from the scene's `PhysicsMaterial`, not from the script.
+- Rotation is locked to Z so the sprite never turns edge-on and vanishes: it tilts in the viewing plane, flips horizontally to face the way it is travelling, and turns belly up when it dies. **Point the arena camera down −Z.**
+- Signals: `dealt_damage(target, amount)`, `took_damage(amount, from)`, `died(battler)`. A dead fish keeps its physics and stays in the arena — whoever spawned it decides when to free it.
+- Physics layer 3 (`Battler`); collides with `Ground` and other battlers, never with `Water`.
+
 ### Day/night cycle
 
 - One cycle is **20 real minutes**: `DAY_LENGTH` 600 s of daylight (06:00 → 18:00) then `NIGHT_LENGTH` 600 s of night (18:00 → 06:00). Time runs uniformly, so one in-game hour is 50 real seconds.
@@ -137,6 +148,7 @@ FISHING  ──day runs out──>  SELECTION  ──fish picked──>  BATTLE 
 
 - Layer 1: `Ground`
 - Layer 2: `Water`
+- Layer 3: `Battler` — fish in the arena (`BattleFish`)
 
 ## Key Conventions
 
