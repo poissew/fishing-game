@@ -83,17 +83,25 @@ func set_time_of_day(hour: float, announce: bool = false) -> void:
 func skip_to_night() -> void:
 	set_time_of_day(DUSK_HOUR, true)
 
-## Dev shortcut: jump to first light.
+## Dev shortcut: jump to first light, without ending the day - the clock lands
+## back at dawn but day_passed does not fire. Use end_day() for the real thing.
 func skip_to_day() -> void:
 	set_time_of_day(DAWN_HOUR, true)
 
-## Dev shortcut: whichever of the two above is not where the clock already is,
-## so the same key can be pressed repeatedly to step day -> night -> day.
+## Run the rest of the current day out: winds the clock forward to the next
+## dawn, exactly as letting the countdown expire would, so day_passed fires and
+## whatever is waiting on the end of the day (`gamephase`) hears about it.
+func end_day() -> void:
+	advance(CYCLE_LENGTH - time)
+
+## Dev shortcut: step day -> night -> next day on repeated presses of one key.
+## The second press closes the day rather than merely repositioning the clock,
+## so the end-of-day battle is reachable without sitting out 20 minutes.
 func skip_to_next_phase() -> void:
 	if is_day():
 		skip_to_night()
 	else:
-		skip_to_day()
+		end_day()
 
 ## True between dawn and dusk.
 func is_day() -> bool:

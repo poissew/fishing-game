@@ -14,7 +14,7 @@ Open the project in the Godot 4.6 editor and press **F5** (Run Project) or use t
 
 ### Autoloads (global singletons)
 
-Five autoloaded nodes are accessible from any script by name:
+Six autoloaded nodes are accessible from any script by name:
 
 | Name | File | Purpose |
 |------|------|---------|
@@ -23,6 +23,7 @@ Five autoloaded nodes are accessible from any script by name:
 | `randomizer` | `randomizer.gd` | Shared `RandomNumberGenerator` instance. Use `randomizer.RNG` |
 | `options` | `options.gd` | Global settings (e.g. `options.MOUSE_SENS`) |
 | `daynight` | `autoload/day_night.gd` | Day/night clock. `daynight.is_night()`, `hour_of_day()`, `time_string()`, signals `phase_changed` / `hour_passed` / `day_passed` |
+| `gamephase` | `autoload/game_phase.gd` | Which half of the round the game is in: `is_fishing()` / `is_selecting()` / `is_battling()`, signals `phase_changed` / `selection_started` / `battle_started` / `battle_ended` |
 
 ### Data / Resource hierarchy
 
@@ -55,6 +56,22 @@ SpellType (RefCounted)    — Type enum (PHYSICAL, FIRE, ICE, WATER, LIGHTNING, 
    - Timer expiry → `BITE` state; player presses **right-click** → `REELING`
    - On reel, calls `LootTable.pick_entry()` then emits `loot_rolled(item, amount)` back to Player
 3. **Player** receives `loot_rolled`, creates `FishInstance` objects via `FishInstance.create_fish_instance()`
+
+### Game phases
+
+The game runs in rounds: a day of fishing, then one fish sent to fight.
+
+```
+FISHING  ──day runs out──>  SELECTION  ──fish picked──>  BATTLE  ──end_battle()──>  FISHING (next day)
+```
+
+- `gamephase` (`autoload/game_phase.gd`) is the state machine and nothing else — like `daynight` it owns no scene, no UI and no reference to the player. It listens to `daynight.day_passed` (the 20-minute cycle wrapping is what ends the fishing day), freezes `daynight.time_scale` for the whole of SELECTION and BATTLE, and sets it running again on the way back to FISHING.
+- Note `gamephase.phase_changed(phase)` and `daynight.phase_changed(is_day)` are different signals: the first is fishing/selection/battle, the second is day/night.
+- **Player** is the one that drives the screens: it connects to `selection_started` / `battle_started` / `battle_ended`, closes whatever panel was open, and shows `UIFishSelect` then `UIBattle`. Movement, casting and the debug keys are all gated on `gamephase.is_fishing()`, and any bobber still in the water when the day ends is freed.
+- `UIFishSelect` (`classes/ui/UI_FishSelect.gd` + `ui/UI_FishSelect.tscn`) lists everything in `Player.carried_fish()` — inventory grid plus hands — with its combat stats (HP / PHYS / MAG / spell count), strongest first. Click or arrow-keys to pick, Enter or the button to send. With no fish on the player the button becomes SKIP BATTLE and `gamephase.skip_battle()` goes straight to the next day.
+- `UIBattle` (`classes/ui/UI_Battle.gd` + `ui/UI_Battle.tscn`) is **a placeholder for the arena**, not the arena: it holds the BATTLE phase open, shows the champion, and closes the round out on Enter. **Building the arena means replacing it** — connect to `gamephase.battle_started(fish)`, run the fight, then call `gamephase.end_battle(won)`. Nothing else in the game reaches into that file.
+- The champion is not consumed: `send_to_battle()` calls `reset_health()` on it and it stays in the inventory. A fish that comes back dead or beaten is removed from whatever the player was carrying it in (`Player._on_battle_ended`).
+- `daynight.end_day()` runs the rest of the current day out and fires `day_passed`, which is how F3 (second press, at night) reaches the battle without sitting out 20 minutes. `skip_to_day()` still only repositions the clock and does *not* end the day.
 
 ### Day/night cycle
 
@@ -113,7 +130,8 @@ SpellType (RefCounted)    — Type enum (PHYSICAL, FIRE, ICE, WATER, LIGHTNING, 
 | `pause` | Escape — quits game |
 | `interact` | E |
 | `open_inventory` | Tab |
-| `debug_skip_time` | F3 — dev only: skip to nightfall, again for the next morning |
+| `debug_skip_time` | F3 — dev only: skip to nightfall, again to end the day (which starts the battle phase) |
+| `ui_up` / `ui_down` / `ui_accept` | Godot built-ins — move and confirm the pick on the end-of-day screens |
 
 ### Physics layers
 

@@ -10,6 +10,10 @@ var wallet:Wallet = Wallet.new()
 var shop_ui:UIShop = null
 var clock_ui:UIDayNightIcon = null
 var day_timer_ui:UIDayTimer = null
+## End-of-day screens. `gamephase` says when the game moves between fishing and
+## battling; these two are how that shows up on screen.
+var fish_select_ui:UIFishSelect = null
+var battle_ui:UIBattle = null
 ## Shopkeeper whose range the player is standing in, or null.
 var _nearby_shopkeeper: Shopkeeper = null
 
@@ -32,6 +36,12 @@ const SPEED = 5.0
 @onready var player_luck:int = 0
 
 func _input(event: InputEvent) -> void:
+	# The fishing day is over: the selection and battle screens own the input
+	# until the round has been settled, and the world - debug shortcuts included
+	# - is on hold behind them.
+	if not gamephase.is_fishing():
+		return
+
 	# Dev shortcut: skip to nightfall, then to the next morning, so the whole
 	# 20-minute cycle does not have to be sat through. Checked ahead of
 	# everything else so it keeps working with the inventory or shop open.
@@ -92,6 +102,23 @@ func _ready() -> void:
 	shop_ui.close_requested.connect(_close_shop)
 	add_child(shop_ui)
 
+	# Added last, so the end-of-day screens draw over every other panel.
+	var select = load("res://ui/UI_FishSelect.tscn")
+	fish_select_ui = select.instantiate()
+	fish_select_ui.fish_chosen.connect(_on_fish_chosen)
+	fish_select_ui.skip_requested.connect(_on_battle_skipped)
+	add_child(fish_select_ui)
+
+	var battle = load("res://ui/UI_Battle.tscn")
+	battle_ui = battle.instantiate()
+	battle_ui.battle_finished.connect(_on_battle_finished)
+	add_child(battle_ui)
+
+	gamephase.selection_started.connect(_on_selection_started)
+	gamephase.battle_started.connect(_on_battle_started)
+	gamephase.battle_ended.connect(_on_battle_ended)
+	gamephase.phase_changed.connect(_on_game_phase_changed)
+
 	interact_range.body_entered.connect(_on_interact_range_entered)
 	interact_range.body_exited.connect(_on_interact_range_exited)
 
@@ -104,7 +131,7 @@ func _ready() -> void:
 	equip_item(_inst, Hands.Slot.RIGHT)
 
 func _unhandled_input(event: InputEvent) -> void:
-	if inventory_ui.visible or shop_ui.is_open:
+	if inventory_ui.visible or shop_ui.is_open or not gamephase.is_fishing():
 		return
 	if event is InputEventMouseMotion:
 		head.rotate_y(-event.relative.x * options.MOUSE_SENS)
@@ -112,7 +139,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		camera.rotation.x = clamp(camera.rotation.x, deg_to_rad(-80), deg_to_rad(80))
 
 func _physics_process(delta: float) -> void:
-	if inventory_ui.visible or shop_ui.is_open:
+	if inventory_ui.visible or shop_ui.is_open or not gamephase.is_fishing():
 		return
 
 	if not is_on_floor():
@@ -196,6 +223,62 @@ func carried_items() -> Array[ItemInstance]:
 		if item != null:
 			carried.append(item)
 	return carried
+
+## Just the fish out of carried_items() - what can be sent to the arena.
+func carried_fish() -> Array[FishInstance]:
+	var fish: Array[FishInstance] = []
+	for item in carried_items():
+		if item is FishInstance:
+			fish.append(item as FishInstance)
+	return fish
+
+# ── Day / battle phases ───────────────────────────────────────────────────────
+
+## The fishing day ran out. Whatever the player was in the middle of is closed
+## down and the selection screen takes over.
+func _on_selection_started() -> void:
+	if inventory_ui.visible:
+		inventory_ui.close()
+	if shop_ui.is_open:
+		shop_ui.close()
+	_clear_bobbers()
+	fish_select_ui.open(carried_fish())
+
+func _on_fish_chosen(fish: FishInstance) -> void:
+	gamephase.send_to_battle(fish)
+
+func _on_battle_skipped() -> void:
+	fish_select_ui.close()
+	gamephase.skip_battle()
+
+## `gamephase` has handed the champion over. The placeholder card stands in for
+## the arena; when the arena scene exists it binds to the same signal and this
+## goes away.
+func _on_battle_started(fish: FishInstance) -> void:
+	fish_select_ui.close()
+	battle_ui.open(fish)
+
+func _on_battle_finished(won: bool) -> void:
+	gamephase.end_battle(won)
+
+## A fish that lost its fight does not come home; a winner stays in the
+## inventory, ready to be sold or sent out again tomorrow.
+func _on_battle_ended(won: bool, fish: FishInstance) -> void:
+	battle_ui.close()
+	if fish != null and (not won or not fish.is_alive()):
+		_take_carried(fish)
+
+## The mouse belongs to the panels while the day is being wrapped up, and to
+## the camera the rest of the time.
+func _on_game_phase_changed(_phase: int) -> void:
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED if gamephase.is_fishing() \
+		else Input.MOUSE_MODE_VISIBLE
+
+## Any bobber still floating out there belongs to a day that is over.
+func _clear_bobbers() -> void:
+	for child in _world.get_children():
+		if child is Bobber:
+			child.queue_free()
 
 # ── Shop ──────────────────────────────────────────────────────────────────────
 
