@@ -31,6 +31,13 @@ const SPEED = 5.0
 @onready var player_luck:int = 0
 
 func _input(event: InputEvent) -> void:
+	# Dev shortcut: skip to nightfall, then to the next morning, so the whole
+	# 20-minute cycle does not have to be sat through. Checked ahead of
+	# everything else so it keeps working with the inventory or shop open.
+	if event.is_action_pressed("debug_skip_time"):
+		daynight.skip_to_next_phase()
+		return
+
 	if event.is_action_pressed("pause"):
 		if shop_ui.is_open:
 			_close_shop()

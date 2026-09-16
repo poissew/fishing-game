@@ -67,9 +67,33 @@ func advance(seconds: float) -> void:
 
 ## Jump straight to an hour of the in-game day, e.g. set_time_of_day(21.5) for
 ## half past nine at night. Does not count as a new day.
-func set_time_of_day(hour: float) -> void:
+##
+## `announce` decides whether a jump that lands in the other phase is reported
+## as one: off for a silent reposition, which is how the clock seeds itself in
+## _ready(), and on for the dev skip below, where a listener waiting on
+## phase_changed would otherwise miss the transition entirely.
+func set_time_of_day(hour: float, announce: bool = false) -> void:
 	time = _time_for_hour(hour)
-	_sync_markers()
+	if announce:
+		_emit_crossings()
+	else:
+		_sync_markers()
+
+## Dev shortcut: drop straight to nightfall rather than waiting the day out.
+func skip_to_night() -> void:
+	set_time_of_day(DUSK_HOUR, true)
+
+## Dev shortcut: jump to first light.
+func skip_to_day() -> void:
+	set_time_of_day(DAWN_HOUR, true)
+
+## Dev shortcut: whichever of the two above is not where the clock already is,
+## so the same key can be pressed repeatedly to step day -> night -> day.
+func skip_to_next_phase() -> void:
+	if is_day():
+		skip_to_night()
+	else:
+		skip_to_day()
 
 ## True between dawn and dusk.
 func is_day() -> bool:

@@ -93,7 +93,8 @@ SpellType (RefCounted)    — Type enum (PHYSICAL, FIRE, ICE, WATER, LIGHTNING, 
 | `right_click` | Mouse right — reel in (when in BITE state) |
 | `pause` | Escape — quits game |
 | `interact` | E |
-| `open_inventory` | F2 |
+| `open_inventory` | Tab |
+| `debug_skip_time` | F3 — dev only: skip to nightfall, again for the next morning |
 
 ### Physics layers
 
