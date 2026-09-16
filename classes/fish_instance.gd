@@ -138,11 +138,11 @@ func tick_spells(delta: float) -> void:
 		if spell != null:
 			spell.tick(delta)
 
-## The first spell that goes off on contact and is off cooldown, or null. Only
-## one can fire per touch: the fish spends whichever it finds first.
-func ready_on_hit_spell() -> SpellInstance:
+## The first spell waiting on `trigger` that is off cooldown, or null. Only one
+## can fire per occasion: the fish spends whichever it finds first.
+func ready_spell(trigger: SpellData.Trigger) -> SpellInstance:
 	for spell in spells:
-		if spell != null and spell.is_ready() and spell.data.is_on_hit():
+		if spell != null and spell.is_ready() and spell.data.trigger == trigger:
 			return spell
 	return null
 

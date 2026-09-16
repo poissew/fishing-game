@@ -21,7 +21,8 @@ extends RigidBody3D
 ## or floor, rolls its damage through SpellInstance.try_cast() and feeds it into
 ## the same take_damage() a touch uses - the only difference is that a blast
 ## comes from a point in the world rather than from another fish, and so shoves
-## outwards from it, the caster included.
+## outwards from it, the caster included. A spell can also wait for the top of a
+## hop instead - see _tick_peak() - and stop the fish there while it fires.
 ##
 ## The collider is a capsule lying down the length of the fish, sized off the
 ## icon's own aspect, so the hitbox is the shape of the thing on screen.
@@ -129,6 +130,13 @@ const KNOCKBACK_LIFT := 0.25
 ## touch is not handed back the difference by the cap.
 const KNOCKBACK_MAX_SPEED := 2.5
 
+## How fast the fish had to be rising the frame before for the top of a hop to
+## count as a peak. Barely over zero on purpose, and it has to stay there: one
+## physics frame of gravity is only 0.16 units/s at 60 Hz, so by definition a
+## fish about to turn over the top is crawling. Anything larger than that never
+## fires at all. What keeps the floor out of it is the _grounded check, not this.
+const PEAK_RISE := 0.02
+
 ## Stands in for "this damage came from nowhere in particular". Damage carrying
 ## it leaves the fish where it stands instead of picking a direction on its own.
 const NO_ORIGIN := Vector3.INF
@@ -182,6 +190,15 @@ var _flop_timer := 0.0
 var _grounded := false
 ## Cooldown left per opponent, keyed by instance id.
 var _hit_cooldowns := {}
+
+## The volley a spell left running: what there is still to fire, at what, and
+## how long the fish hangs there before gravity gets it back.
+var _volley: BubbleSpellData = null
+var _volley_target: BattleFish = null
+var _volley_damage := 0
+var _volley_shots := 0
+var _volley_timer := 0.0
+var _hang_left := 0.0
 
 ## The fish's velocity from before the physics step it is now being told about.
 ## By the time body_entered fires, the solver has already bounced the fish off
@@ -370,10 +387,13 @@ func _physics_process(delta: float) -> void:
 	_tick_hit_cooldowns(delta)
 	if fish != null and is_alive():
 		fish.tick_spells(delta)
+	_tick_volley(delta)
 	_tick_flop(delta)
+	_tick_peak()
 	_tick_look(delta)
 	# Last thing in the frame, so it is the velocity going into the step the
-	# next contact will come out of. See _approach_velocity.
+	# next contact will come out of, and so _tick_peak() above still had the
+	# frame before to compare against. See _approach_velocity.
 	_approach_velocity = linear_velocity
 
 func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
@@ -397,7 +417,7 @@ func _tick_hit_cooldowns(delta: float) -> void:
 ## something solid, so a fish that is still bouncing flops the moment it lands
 ## instead of throwing itself around from nothing.
 func _tick_flop(delta: float) -> void:
-	if not is_alive():
+	if not is_alive() or _hang_left > 0.0:
 		return
 	_flop_timer -= delta
 	if _flop_timer > 0.0 or not _grounded:
@@ -524,7 +544,7 @@ func _hit(other: BattleFish) -> void:
 func _cast_on_hit(other: BattleFish) -> void:
 	if fish == null or not is_alive():
 		return
-	var spell := fish.ready_on_hit_spell()
+	var spell := fish.ready_spell(SpellData.Trigger.ON_HIT)
 	if spell == null:
 		return
 	var damage := spell.try_cast(fish)
@@ -536,6 +556,118 @@ func _cast_on_hit(other: BattleFish) -> void:
 	var blast := spell.data as ExplosionSpellData
 	if blast != null:
 		_explode(blast, _contact_point(other), damage)
+
+## Spots the top of a hop: rising the frame before, no longer rising now, and
+## nothing underfoot. That is the moment a spell waiting on AT_JUMP_PEAK gets.
+func _tick_peak() -> void:
+	if _grounded or _hang_left > 0.0 or not is_alive():
+		return
+	if _approach_velocity.y <= PEAK_RISE or linear_velocity.y > 0.0:
+		return
+	_cast_at_peak()
+
+## Spends a spell that was waiting for the top of a hop. Nothing to shoot at
+## means the charge is kept rather than spent on the scenery - unlike an ON_HIT
+## spell, this one is aimed, so firing it at nobody would just waste it.
+func _cast_at_peak() -> void:
+	if fish == null:
+		return
+	var spell := fish.ready_spell(SpellData.Trigger.AT_JUMP_PEAK)
+	if spell == null:
+		return
+	var volley := spell.data as BubbleSpellData
+	if volley == null:
+		return
+	var target := _nearest_enemy()
+	if target == null:
+		return
+	var damage := spell.try_cast(fish)
+	if damage == SpellInstance.NOT_READY:
+		return
+	cast_spell.emit(spell.data, target)
+	_start_volley(volley, damage, target)
+
+## Stops the fish dead at the top of its hop and starts the bubbles coming. The
+## body is frozen rather than slowed: a fish still drifting upwards while it
+## fires reads as one that got interrupted, not one taking aim.
+func _start_volley(spell: BubbleSpellData, damage: int, target: BattleFish) -> void:
+	_volley = spell
+	_volley_target = target
+	_volley_damage = damage
+	_volley_shots = spell.count
+	_volley_timer = 0.0
+	_hang_left = maxf(spell.hang_time, 0.01)
+	linear_velocity = Vector3.ZERO
+	angular_velocity = Vector3.ZERO
+	freeze = true
+
+## Runs a volley that is already going: one bubble every `interval`, and the
+## fish let go again once `hang_time` is up. A fish that dies in mid-volley
+## drops the rest of it and falls.
+func _tick_volley(delta: float) -> void:
+	if _hang_left <= 0.0:
+		return
+	if not is_alive() or _volley == null:
+		_end_hang()
+		return
+	_hang_left = maxf(0.0, _hang_left - delta)
+	_volley_timer -= delta
+	# maxf: an interval of 0 would otherwise never let the loop end.
+	var interval := maxf(_volley.interval, 0.01)
+	while _volley_shots > 0 and _volley_timer <= 0.0:
+		_fire_bubble()
+		_volley_shots -= 1
+		_volley_timer += interval
+	if _hang_left <= 0.0:
+		_end_hang()
+
+## Hands the fish back to gravity and drops whatever was left of the volley.
+func _end_hang() -> void:
+	_hang_left = 0.0
+	_volley = null
+	_volley_target = null
+	_volley_shots = 0
+	if freeze:
+		freeze = false
+
+## One bubble, aimed at wherever the target is standing at this instant. It is
+## fired and forgotten - the bubble does not follow the fish it was aimed at,
+## which is the whole reason a volley can be dodged.
+func _fire_bubble() -> void:
+	var target := _volley_target
+	if target == null or not is_instance_valid(target) or not target.is_alive():
+		return
+	var direction := target.global_position - global_position
+	if direction.is_zero_approx():
+		return
+	direction = direction.normalized()
+	# Out at the nose rather than at the middle of the fish, so the bubbles look
+	# spat rather than dropped.
+	var bubble := SpellBubble.fire(_effect_parent(),
+		global_position + direction * world_length() * 0.5,
+		direction, _volley, _volley_damage, self)
+	if bubble != null:
+		bubble.hit_fish.connect(_on_bubble_hit)
+
+## A bubble landing is this fish landing a hit, as far as anything watching is
+## concerned.
+func _on_bubble_hit(target: BattleFish, amount: int) -> void:
+	dealt_damage.emit(target, amount)
+
+## The closest fish this one is allowed to hit, or null when there is nobody
+## left to aim at.
+func _nearest_enemy() -> BattleFish:
+	var best: BattleFish = null
+	var best_distance := INF
+	for node in get_tree().get_nodes_in_group(GROUP):
+		var other := node as BattleFish
+		if other == null or not can_hit(other):
+			continue
+		var distance := global_position.distance_squared_to(other.global_position)
+		if distance < best_distance:
+			best_distance = distance
+			best = other
+	return best
 
 ## Throws the fish that set the blast off back the way it came. It takes none of
 ## the blast's damage - can_hit() rules itself out - but an explosion under its
@@ -597,6 +729,8 @@ func _on_fish_died() -> void:
 		return
 	_dead = true
 	_hit_cooldowns.clear()
+	# Frozen in mid-air firing bubbles when it died: let it drop.
+	_end_hang()
 	# It stops flopping and turns belly up - _sprite_roll() handles the turn -
 	# but keeps its physics so it drops and settles instead of freezing in
 	# mid-air. The arena frees it when it wants.

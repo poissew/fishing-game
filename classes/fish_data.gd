@@ -6,6 +6,7 @@ extends Item
 ## keyed by id, the way Itemdb does it for items.
 const SPELL_POOL := [
 	preload("res://data/spells/explosion.tres"),
+	preload("res://data/spells/bubble_blast.tres"),
 ]
 
 enum Rarity {
