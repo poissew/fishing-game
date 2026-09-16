@@ -45,8 +45,6 @@ lava="laval xd"
 
 [gui]
 
-; Every Control in the game draws its text with monogram. Scripts that roll
-; their own draw_string() pull the same file through UIFont instead.
 theme/custom_font="res://ui/fonts/monogram.ttf"
 
 [input]
@@ -106,3 +104,4 @@ debug_skip_time={
 
 3d_physics/layer_1="Ground"
 3d_physics/layer_2="Water"
+3d_physics/layer_3="Battler"
