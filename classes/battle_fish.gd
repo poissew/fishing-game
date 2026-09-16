@@ -20,9 +20,13 @@ extends RigidBody3D
 ## here so that when they land they can roll their damage and feed it into the
 ## same take_damage() a touch uses - nothing else needs to change.
 ##
-## The sprite does not billboard: the body is locked to spinning on Z, so the
-## fish keeps facing +Z and tilts in the arena's viewing plane. Point the arena
-## camera down -Z (the direction a camera faces by default) and it reads right.
+## The sprite does not billboard. Yaw is locked, so the fish always faces +Z -
+## point the arena camera down -Z (the direction a camera faces by default) and
+## it reads right - but pitch and roll are free, and the sphere collider rolls
+## them: the fish tumbles the way it is thrown, like the loot on the end of a
+## reeled-in line. The sprite takes that tumble off the body every frame and
+## drops the yaw out of it, which is the one part of a free-rolling ball a flat
+## sprite cannot survive - see _face_the_tumble().
 
 const SCENE_PATH := "res://objects/BattleFish.tscn"
 const DEFAULT_ICON: Texture2D = preload("res://icon.svg")
@@ -62,7 +66,8 @@ const FLOP_INTERVAL := Vector2(0.30, 0.85)
 ## floor, and a hop that hangs in the air is a hop it cannot flop out of.
 const FLOP_UP   := 2.4
 const FLOP_SIDE := 3.2
-## Angular kick, on Z because that is the only axis left free.
+## Angular kick, always about the axis the ball would roll around going that
+## way, so a hop tumbles the fish forwards rather than spinning it on the spot.
 const FLOP_SPIN := 7.0
 
 ## Range over which chase_bias fades. Within CHASE_NEAR a fish has its opponent
@@ -309,8 +314,11 @@ func _tick_flop(delta: float) -> void:
 func _flop() -> void:
 	var dir := _flop_direction()
 	apply_central_impulse((Vector3.UP * FLOP_UP + dir * FLOP_SIDE) * mass)
-	# Z is the only angular axis left free, so this is the spin that shows.
-	apply_torque_impulse(Vector3.BACK * randomizer.RNG.randf_range(-FLOP_SPIN, FLOP_SPIN) * mass)
+	# UP cross dir is the axis a ball rolling that way turns about, so the fish
+	# tumbles along its hop instead of spinning against it. Only the strength is
+	# random: a fish rolling backwards out of its own throw looks wrong.
+	var roll_axis := Vector3.UP.cross(dir)
+	apply_torque_impulse(roll_axis * randomizer.RNG.randf_range(FLOP_SPIN * 0.4, FLOP_SPIN) * mass)
 	_wiggle_amount = 1.0
 
 ## A random direction along the floor, pulled towards chase_target by however
@@ -341,18 +349,18 @@ func _random_horizontal() -> Vector3:
 func _roll_flop_delay() -> float:
 	return randomizer.RNG.randf_range(FLOP_INTERVAL.x, FLOP_INTERVAL.y)
 
-## The purely cosmetic half: the rock of the sprite after a flop, the red flash
-## of a hit, and facing the way the fish is travelling.
+## The purely cosmetic half: the tumble taken off the ball, the rock of a flop,
+## the red flash of a hit, and facing the way the fish is travelling.
 func _tick_look(delta: float) -> void:
 	if _dead:
+		# Still follows the ball while the body settles, just belly up.
+		_face_the_tumble()
 		return
 
 	if _wiggle_amount > 0.0:
 		_wiggle_phase += delta * WIGGLE_SPEED
 		_wiggle_amount = maxf(0.0, _wiggle_amount - delta / WIGGLE_DECAY)
-		_sprite.rotation.z = sin(_wiggle_phase) * WIGGLE_ANGLE * _wiggle_amount
-	else:
-		_sprite.rotation.z = 0.0
+	_face_the_tumble()
 
 	if _flash_left > 0.0:
 		_flash_left = maxf(0.0, _flash_left - delta)
@@ -361,6 +369,28 @@ func _tick_look(delta: float) -> void:
 	# Flipped rather than turned: turning a flat sprite edge-on makes it vanish.
 	if absf(linear_velocity.x) > 0.15:
 		_sprite.flip_h = linear_velocity.x < 0.0
+
+## Points the sprite the way the ball underneath it is lying - pitch and roll
+## straight off the collider - but never its yaw.
+##
+## Yaw is locked on the body and the fish still picks some up: rolling about two
+## axes at once composes into a turn about the third, and no velocity constraint
+## stops that. Left alone a fish can settle at a right angle to the camera, and
+## a flat sprite side-on is not a thin fish, it is no fish at all. Dropping the
+## yaw out of the body's own orientation keeps the tumble and loses that.
+##
+## The wiggle of a flop, and being belly up once dead, ride on top as roll.
+func _face_the_tumble() -> void:
+	# Default Euler order is YXZ for both of these, so y really is the yaw.
+	var tumble := global_basis.get_euler()
+	var roll := tumble.z + _sprite_roll()
+	_sprite.global_basis = Basis.from_euler(Vector3(tumble.x, 0.0, roll))
+
+## Roll of the sprite within its own plane, on top of however the ball is lying.
+func _sprite_roll() -> float:
+	if _dead:
+		return PI
+	return sin(_wiggle_phase) * WIGGLE_ANGLE * _wiggle_amount
 
 # -- Contact ------------------------------------------------------------------
 
@@ -390,8 +420,9 @@ func _on_fish_died() -> void:
 		return
 	_dead = true
 	_hit_cooldowns.clear()
-	# It stops flopping and turns belly up, but keeps its physics so it drops
-	# and settles instead of freezing mid-air. The arena frees it when it wants.
-	_sprite.rotation.z = PI
+	# It stops flopping and turns belly up - _sprite_roll() handles the turn -
+	# but keeps its physics so it drops and settles instead of freezing in
+	# mid-air. The arena frees it when it wants.
+	_face_the_tumble()
 	_sprite.modulate = tint.darkened(0.45).lerp(Color(0.55, 0.55, 0.60, 1.0), 0.5)
 	died.emit(self)
