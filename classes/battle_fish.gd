@@ -20,13 +20,15 @@ extends RigidBody3D
 ## here so that when they land they can roll their damage and feed it into the
 ## same take_damage() a touch uses - nothing else needs to change.
 ##
-## The sprite does not billboard. Yaw is locked, so the fish always faces +Z -
-## point the arena camera down -Z (the direction a camera faces by default) and
-## it reads right - but pitch and roll are free, and the sphere collider rolls
-## them: the fish tumbles the way it is thrown, like the loot on the end of a
-## reeled-in line. The sprite takes that tumble off the body every frame and
-## drops the yaw out of it, which is the one part of a free-rolling ball a flat
-## sprite cannot survive - see _face_the_tumble().
+## The collider is a capsule lying down the length of the fish, sized off the
+## icon's own aspect, so the hitbox is the shape of the thing on screen.
+##
+## The sprite does not billboard. Yaw and pitch are locked and roll is free, so
+## the fish always faces +Z and tips end over end in the arena's viewing plane -
+## point the camera down -Z (the direction a camera faces by default) and it
+## reads right. Pitch is locked because a capsule down the fish rolls about its
+## own length far too easily, and a flat sprite doing that is edge-on half the
+## time; _face_the_tumble() copies what is left onto the sprite.
 
 const SCENE_PATH := "res://objects/BattleFish.tscn"
 const DEFAULT_ICON: Texture2D = preload("res://icon.svg")
@@ -41,10 +43,9 @@ const DEFAULT_ICON: Texture2D = preload("res://icon.svg")
 const BASE_LEN := 0.90
 const MIN_LEN  := 0.35
 const MAX_LEN  := 2.20
-## Collision radius as a share of length. A fish is nowhere near a ball, but a
-## sphere between half its height and half its length hits about where the
-## sprite looks like it should.
-const RADIUS_RATIO := 0.30
+## Smallest collider a fish can have, in case an icon turns up with no height
+## worth speaking of.
+const MIN_RADIUS := 0.03
 
 ## Tint flashed on the sprite when the fish is hit, and how long it fades over.
 const HIT_COLOR := Color(1.0, 0.35, 0.35, 1.0)
@@ -66,8 +67,8 @@ const FLOP_INTERVAL := Vector2(0.30, 0.85)
 ## floor, and a hop that hangs in the air is a hop it cannot flop out of.
 const FLOP_UP   := 2.4
 const FLOP_SIDE := 3.2
-## Angular kick, always about the axis the ball would roll around going that
-## way, so a hop tumbles the fish forwards rather than spinning it on the spot.
+## Angular kick, always the way the hop is going, so a fish tips over its own
+## nose rather than spinning against its travel.
 const FLOP_SPIN := 7.0
 
 ## Range over which chase_bias fades. Within CHASE_NEAR a fish has its opponent
@@ -204,11 +205,31 @@ func _apply_fish() -> void:
 
 	# A shape of its own per fish: the one in the scene is shared between every
 	# instance, so resizing that would resize every other battler with it.
-	var sphere := SphereShape3D.new()
-	sphere.radius = maxf(length * RADIUS_RATIO, 0.05)
-	_shape.shape = sphere
+	#
+	# A capsule down the length of the fish, as wide as the icon is tall: the
+	# hitbox is the fish rather than a ball drawn around it, so a sardine stops
+	# fighting inside a beach ball and every fish rests on the floor at the
+	# height it is actually drawn at.
+	var capsule := CapsuleShape3D.new()
+	capsule.radius = maxf(_sprite_height(length) * 0.5, MIN_RADIUS)
+	# CapsuleShape3D.height counts the caps, so it is the whole nose-to-tail
+	# span. The max is for an icon taller than it is wide, where the fish is the
+	# round part and there is no middle section left.
+	capsule.height = maxf(length, capsule.radius * 2.0)
+	_shape.shape = capsule
+	# Capsules stand up the Y axis; this one has to lie down the fish instead.
+	_shape.rotation = Vector3(0.0, 0.0, PI * 0.5)
 
 	mass = clampf(fish.weight, MASS_MIN, MASS_MAX)
+
+## How tall the fish is drawn, for a given nose-to-tail length. Taken from the
+## icon's own aspect, so the collider is the shape of the art rather than a
+## number picked to suit it.
+func _sprite_height(length: float) -> float:
+	var texture := _sprite.texture
+	if texture == null or texture.get_width() <= 0:
+		return length
+	return length * float(texture.get_height()) / float(texture.get_width())
 
 ## How long this fish is in world units, nose to tail. Same curve as the held
 ## viewmodel, scaled up: the arena is looked at rather than glanced down at, so
@@ -314,11 +335,15 @@ func _tick_flop(delta: float) -> void:
 func _flop() -> void:
 	var dir := _flop_direction()
 	apply_central_impulse((Vector3.UP * FLOP_UP + dir * FLOP_SIDE) * mass)
-	# UP cross dir is the axis a ball rolling that way turns about, so the fish
-	# tumbles along its hop instead of spinning against it. Only the strength is
-	# random: a fish rolling backwards out of its own throw looks wrong.
-	var roll_axis := Vector3.UP.cross(dir)
-	apply_torque_impulse(roll_axis * randomizer.RNG.randf_range(FLOP_SPIN * 0.4, FLOP_SPIN) * mass)
+	# The Z of UP.cross(dir), which is the end-over-end tip of a hop going that
+	# way: throw itself left, go over its own nose to the left. The X of that
+	# cross product would be the fish log-rolling about its own length, which is
+	# a flat sprite turning edge-on, so pitch stays locked and this leaves it
+	# out. A hop straight at or away from the camera tips nothing, and the
+	# wiggle covers that. Only the strength is random - tipping backwards out of
+	# its own throw looks wrong.
+	var tip := Vector3(0.0, 0.0, -dir.x)
+	apply_torque_impulse(tip * randomizer.RNG.randf_range(FLOP_SPIN * 0.4, FLOP_SPIN) * mass)
 	_wiggle_amount = 1.0
 
 ## A random direction along the floor, pulled towards chase_target by however
@@ -370,14 +395,14 @@ func _tick_look(delta: float) -> void:
 	if absf(linear_velocity.x) > 0.15:
 		_sprite.flip_h = linear_velocity.x < 0.0
 
-## Points the sprite the way the ball underneath it is lying - pitch and roll
+## Points the sprite the way the body underneath it is lying - pitch and roll
 ## straight off the collider - but never its yaw.
 ##
-## Yaw is locked on the body and the fish still picks some up: rolling about two
-## axes at once composes into a turn about the third, and no velocity constraint
-## stops that. Left alone a fish can settle at a right angle to the camera, and
-## a flat sprite side-on is not a thin fish, it is no fish at all. Dropping the
-## yaw out of the body's own orientation keeps the tumble and loses that.
+## Yaw is locked and a fish can still pick some up: rotations about two axes
+## compose into a turn about the third, so anything that unlocks pitch brings it
+## back. Left alone a fish can settle at a right angle to the camera, and a flat
+## sprite side-on is not a thin fish, it is no fish at all. Dropping the yaw out
+## of the body's own orientation keeps the tipping and loses that.
 ##
 ## The wiggle of a flop, and being belly up once dead, ride on top as roll.
 func _face_the_tumble() -> void:
