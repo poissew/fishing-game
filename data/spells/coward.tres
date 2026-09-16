@@ -1,13 +1,10 @@
-[gd_resource type="Resource" script_class="CowardSpellData" format=3]
+[gd_resource type="Resource" script_class="CowardSpellData" format=3 uid="uid://8fdyrooov2va"]
 
-[ext_resource type="Script" path="res://classes/spells/coward_spell_data.gd" id="1_cowd"]
+[ext_resource type="Script" uid="uid://nct44cqmb6ak" path="res://classes/spells/coward_spell_data.gd" id="1_cowd"]
 
 [resource]
 script = ExtResource("1_cowd")
 name = "Coward"
-description = "This one has seen enough. It hops away from whatever it is up against instead of at it, and the closer that thing gets the harder it runs."
+description = "This one has seen enough. It hops away from whatever it is up against instead of at it, the closer that thing gets the harder it runs, and it will not throw a punch even when it is caught."
 trigger = 3
 base_power = 0
-base_type = 0
-base_cooldown = 0
-flee_bias = 0.9

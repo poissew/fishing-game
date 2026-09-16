@@ -1,7 +1,8 @@
 extends Control
 
 ## Readout for the test arena: one card per fighter with its stats and health,
-## a running log of the hits, and the banner when one of them goes belly up.
+## the round clock across the top, a running log of the hits, and the banner
+## when one of them goes belly up.
 ##
 ## Dev-only and deliberately without a class_name - it is not part of the game's
 ## UI, it just has to make the numbers visible while the fish flop. Same
@@ -24,6 +25,14 @@ const C_HP           := Color(0.30, 0.70, 0.32, 1.00)
 const C_HP_LOW       := Color(0.80, 0.30, 0.25, 1.00)
 const C_DEAD         := Color(0.45, 0.45, 0.50, 1.00)
 const C_WIN          := Color(0.95, 0.85, 0.40, 1.00)
+const C_DOT          := Color(0.72, 0.45, 0.85, 1.00)
+const C_CLOCK        := Color(0.62, 0.80, 0.56, 1.00)
+const C_SUDDEN       := Color(0.90, 0.35, 0.30, 1.00)
+
+## Seconds left below which the clock turns red, and how fast the sudden-death
+## banner blinks, in blinks a second.
+const CLOCK_LOW := 10.0
+const SUDDEN_BLINK := 2.0
 
 ## Below this share of health the bar turns red.
 const HP_LOW := 0.3
@@ -64,6 +73,7 @@ func _draw() -> void:
 		var x := PAD if i == 0 else vp.x - CARD_W - PAD
 		_draw_card(Vector2(x, PAD), battler)
 
+	_draw_clock(vp)
 	_draw_log(vp)
 	_draw_banner(vp)
 
@@ -80,6 +90,14 @@ func _draw_card(at: Vector2, battler: BattleFish) -> void:
 	var name_color := C_DEAD if not battler.is_alive() else battler.tint
 	draw_string(font, Vector2(left, at.y + PAD + UIFont.CAP_H), fish.data.name,
 		HORIZONTAL_ALIGNMENT_LEFT, -1, UIFont.SIZE, name_color)
+
+	# Whatever is ticking on this fish, right-aligned on the name row: how many
+	# ticks are left and what one of them costs.
+	if battler.dot_ticks_left() > 0:
+		var dot := "DOT %dx%d" % [battler.dot_ticks_left(), battler.dot_damage()]
+		var dot_w := font.get_string_size(dot, HORIZONTAL_ALIGNMENT_LEFT, -1, UIFont.SIZE).x
+		draw_string(font, Vector2(at.x + CARD_W - PAD - dot_w, at.y + PAD + UIFont.CAP_H),
+			dot, HORIZONTAL_ALIGNMENT_LEFT, -1, UIFont.SIZE, C_DOT)
 	draw_string(font, Vector2(left, at.y + PAD + LINE_H + UIFont.CAP_H),
 		"%.2fm  PHYS %d  MAG %d" % [fish.size, battler.phys_dmg(), battler.magic_dmg()],
 		HORIZONTAL_ALIGNMENT_LEFT, -1, UIFont.SIZE, C_STAT)
@@ -97,6 +115,36 @@ func _draw_card(at: Vector2, battler: BattleFish) -> void:
 	draw_string(font, Vector2(bar.position.x + (bar.size.x - hp_w) * 0.5,
 			bar.position.y + (BAR_H + UIFont.CAP_H) * 0.5),
 		hp, HORIZONTAL_ALIGNMENT_LEFT, -1, UIFont.SIZE, C_TEXT)
+
+# -- Round clock ---------------------------------------------------------------
+
+## Centre top, between the two cards: the time left while there is any, then
+## what sudden death is costing once there is not.
+func _draw_clock(vp: Vector2) -> void:
+	# Typed, unlike _arena itself: BattleRound is game code with a class_name, so
+	# there is a real type to put here and time_left() comes back as a float.
+	var clock: BattleRound = _arena.round_clock
+	if clock == null:
+		return
+
+	var text := ""
+	var color := C_CLOCK
+	if clock.is_sudden_death():
+		# Blinking, because by now the fish are not the ones deciding this.
+		if fmod(Time.get_ticks_msec() / 1000.0 * SUDDEN_BLINK, 1.0) > 0.5:
+			return
+		text = "SUDDEN DEATH  -%d" % clock.drain_amount()
+		color = C_SUDDEN
+	else:
+		var left := clock.time_left()
+		text = "%d:%02d" % [int(left) / 60, int(left) % 60]
+		if left <= CLOCK_LOW:
+			color = C_SUDDEN
+
+	var font := UIFont.FONT
+	var width := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, UIFont.SIZE).x
+	draw_string(font, Vector2((vp.x - width) * 0.5, PAD + UIFont.CAP_H),
+		text, HORIZONTAL_ALIGNMENT_LEFT, -1, UIFont.SIZE, color)
 
 # -- Log and banner ------------------------------------------------------------
 

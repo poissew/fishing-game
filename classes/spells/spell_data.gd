@@ -30,6 +30,11 @@ enum Trigger {
 @export_multiline var description: String
 ## When the battler should cast this. See Trigger.
 @export var trigger: Trigger = Trigger.MANUAL
+## ON_HIT only. False - the default - and the spell goes off on any contact at
+## all, a wall or the floor included, which is what a fish that simply explodes
+## wants. True and it waits for a touch that actually landed damage on an enemy,
+## which is what anything that has to have something to do *to* needs.
+@export var needs_hit: bool = false
 
 @export_category("Combat")
 ## Base damage before the caster's phys_dmg / magic_dmg is applied.

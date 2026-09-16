@@ -8,6 +8,10 @@ extends Node3D
 ## It is the same 480x270 SubViewport the game renders through, so the fish and
 ## the readout pixelate exactly as they would in the real arena.
 ##
+## The round itself - the clock, sudden death, and which fish is handed the win -
+## is BattleRound, which is game code and not part of this scene. This just
+## starts one per pair and listens.
+##
 ##   R / Enter - fresh pair of fighters
 ##   1 / 2     - rematch the same two, healed up
 ##   E         - rematch with both of them given the next spell in the pool,
@@ -52,13 +56,21 @@ const SPAWN_Y := 1.2
 
 ## The two fighters, in team order. The HUD reads this.
 var battlers: Array[BattleFish] = []
-## Set when one of them dies, and read by the HUD for the banner.
+## Set when the round is decided, and read by the HUD for the banner.
 var winner: BattleFish = null
+## The clock this round is running on. The HUD reads it for the countdown.
+var round_clock: BattleRound = null
 ## Which spell the E key hands out next: an index into TEST_SPELLS, or the size
 ## of it for "all of them at once".
 var armed_index := 0
 
 func _ready() -> void:
+	round_clock = BattleRound.new()
+	round_clock.name = "BattleRound"
+	add_child(round_clock)
+	round_clock.time_up.connect(_on_time_up)
+	round_clock.drained.connect(_on_drained)
+	round_clock.finished.connect(_on_round_finished)
 	_hud.bind_arena(self)
 	start_round()
 
@@ -134,6 +146,8 @@ func _spawn_pair(fish: Array) -> void:
 	battlers[0].chase_target = battlers[1]
 	battlers[1].chase_target = battlers[0]
 
+	round_clock.start(battlers)
+
 ## Two different species, so a round is never a fish against its own twin.
 func _pick_species() -> Array:
 	var pool := SPECIES.duplicate()
@@ -150,13 +164,21 @@ func _on_cast_spell(spell: SpellData, _target: BattleFish, caster: BattleFish) -
 	_hud.log_line("%s casts %s" % [caster.fish.data.name, spell.name])
 
 func _on_battler_died(battler: BattleFish) -> void:
-	for other in battlers:
-		if other != battler:
-			winner = other
 	# Deferred: `died` comes out of take_damage(), so it beats the attacker's
 	# dealt_damage to the log and the kill would otherwise print above the hit
 	# that caused it.
 	_hud.log_line.call_deferred("%s is done for" % battler.fish.data.name)
+
+func _on_time_up() -> void:
+	_hud.log_line("time up - sudden death")
+
+func _on_drained(amount: int) -> void:
+	_hud.log_line("the arena takes %d" % amount)
+
+## BattleRound decides the winner, here and when a fish simply dies: the arena
+## only has to remember it for the banner.
+func _on_round_finished(round_winner: BattleFish) -> void:
+	winner = round_winner
 
 # -- Input ---------------------------------------------------------------------
 

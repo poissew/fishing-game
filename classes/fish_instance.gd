@@ -138,13 +138,16 @@ func tick_spells(delta: float) -> void:
 		if spell != null:
 			spell.tick(delta)
 
-## The first spell waiting on `trigger` that is off cooldown, or null. Only one
-## can fire per occasion: the fish spends whichever it finds first.
-func ready_spell(trigger: SpellData.Trigger) -> SpellInstance:
+## Every spell waiting on `trigger` that is off cooldown, in the order the fish
+## carries them. All of them rather than the first: two spells that both go off
+## on a touch are two separate spells with two separate cooldowns, and a fish
+## carrying both should get both.
+func ready_spells(trigger: SpellData.Trigger) -> Array[SpellInstance]:
+	var ready: Array[SpellInstance] = []
 	for spell in spells:
 		if spell != null and spell.is_ready() and spell.data.trigger == trigger:
-			return spell
-	return null
+			ready.append(spell)
+	return ready
 
 func is_alive() -> bool:
 	return current_health > 0
