@@ -8,6 +8,7 @@ var hands:Hands = Hands.new()
 
 var wallet:Wallet = Wallet.new()
 var shop_ui:UIShop = null
+var clock_ui:UIDayNightIcon = null
 ## Shopkeeper whose range the player is standing in, or null.
 var _nearby_shopkeeper: Shopkeeper = null
 
@@ -30,6 +31,13 @@ const SPEED = 5.0
 @onready var player_luck:int = 0
 
 func _input(event: InputEvent) -> void:
+	# Dev shortcut: skip to nightfall, then to the next morning, so the whole
+	# 20-minute cycle does not have to be sat through. Checked ahead of
+	# everything else so it keeps working with the inventory or shop open.
+	if event.is_action_pressed("debug_skip_time"):
+		daynight.skip_to_next_phase()
+		return
+
 	if event.is_action_pressed("pause"):
 		if shop_ui.is_open:
 			_close_shop()
@@ -56,6 +64,13 @@ func _input(event: InputEvent) -> void:
 		use_rod()
 
 func _ready() -> void:
+	# First of the UI children on purpose: the inventory and shop both dim the
+	# whole screen when they open, and being underneath them means the clock
+	# gets dimmed along with the world instead of floating over the overlay.
+	var clock = load("res://ui/UI_DayNightIcon.tscn")
+	clock_ui = clock.instantiate()
+	add_child(clock_ui)
+
 	var inv = load("res://ui/UI_Inventory.tscn")
 	inventory_ui = inv.instantiate()
 	inventory.height = 8
