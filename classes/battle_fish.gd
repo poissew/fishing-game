@@ -28,12 +28,18 @@ const DEFAULT_ICON: Texture2D = preload("res://icon.svg")
 
 # -- Look ---------------------------------------------------------------------
 
-## World height of a fish of length 1.0, and the clamp either side of it. Same
-## sqrt curve as the held viewmodel: a 9.8m shark reads as bigger than a 0.2m
-## sardine without being fifty times the size of one.
-const BASE_H := 0.55
-const MIN_H  := 0.22
-const MAX_H  := 1.50
+## World length of a fish of size 1.0, and the clamp either side of it. Same
+## sqrt curve as the held viewmodel, but measured nose to tail rather than top
+## to bottom: fish icons are long and shallow, so length is what decides how
+## much room one takes up. The curve keeps a 9.8m shark bigger than a 0.2m
+## sardine without being fifty times the size of it.
+const BASE_LEN := 0.90
+const MIN_LEN  := 0.35
+const MAX_LEN  := 2.20
+## Collision radius as a share of length. A fish is nowhere near a ball, but a
+## sphere between half its height and half its length hits about where the
+## sprite looks like it should.
+const RADIUS_RATIO := 0.30
 
 ## Tint flashed on the sprite when the fish is hit, and how long it fades over.
 const HIT_COLOR := Color(1.0, 0.35, 0.35, 1.0)
@@ -51,8 +57,10 @@ const WIGGLE_DECAY := 2.6
 const FLOP_INTERVAL := Vector2(0.30, 0.85)
 ## Impulse per unit of mass, so a heavy fish hops as high as a light one - the
 ## weight shows in how hard it lands and shoves, not in it being glued down.
-const FLOP_UP   := 3.6
-const FLOP_SIDE := 2.4
+## Low and long rather than high: a fish out of water throws itself along the
+## floor, and a hop that hangs in the air is a hop it cannot flop out of.
+const FLOP_UP   := 2.4
+const FLOP_SIDE := 3.2
 ## Angular kick, on Z because that is the only axis left free.
 const FLOP_SPIN := 7.0
 
@@ -75,6 +83,10 @@ signal dealt_damage(target: BattleFish, amount: int)
 signal took_damage(amount: int, from: BattleFish)
 ## Fired the moment the bound fish runs out of health. The body is left in the
 ## arena, belly up - whoever spawned it decides when it leaves.
+##
+## It comes out of FishInstance.take_damage(), so on a killing blow it lands
+## before the attacker's own dealt_damage: the death is known before the hit
+## that caused it is reported.
 signal died(battler: BattleFish)
 
 ## The catch this body is. Set through bind_fish(), never written directly.
@@ -84,11 +96,20 @@ var fish: FishInstance = null
 ## a free-for-all: everything hits everything.
 @export var team: int = -1
 
+## Colour the sprite is drawn in, white for the icon as it was painted. The hit
+## flash fades back to this rather than to white, so a team colour survives
+## being hit.
+@export var tint: Color = Color.WHITE:
+	set(value):
+		tint = value
+		if _sprite != null and not _dead:
+			_sprite.modulate = tint
+
 ## Something to flop towards - the opponent, usually. Leave it null and the
 ## fish flops off in whatever direction it feels like.
 @export var chase_target: Node3D = null
 ## How much of a flop aims at chase_target. 0 is pure wandering, 1 a beeline.
-@export_range(0.0, 1.0, 0.05) var chase_bias: float = 0.6
+@export_range(0.0, 1.0, 0.05) var chase_bias: float = 0.75
 
 @onready var _sprite: Sprite3D = $Sprite3D
 @onready var _shape: CollisionShape3D = $CollisionShape3D
@@ -141,26 +162,29 @@ func bind_fish(fish_instance: FishInstance) -> void:
 func _apply_fish() -> void:
 	if fish == null or fish.data == null:
 		return
-	var height := _world_height()
+	var length := world_length()
 	_sprite.texture = fish.data.icon if fish.data.icon else DEFAULT_ICON
-	_sprite.pixel_size = height / maxf(float(_sprite.texture.get_height()), 1.0)
-	_sprite.modulate = Color.WHITE
+	# Scaled off the texture's width, so an icon's own aspect decides how deep
+	# the fish is and a 32px and a 512px icon come out the same length.
+	_sprite.pixel_size = length / maxf(float(_sprite.texture.get_width()), 1.0)
+	_sprite.modulate = tint
 	_sprite.rotation = Vector3.ZERO
 
 	# A shape of its own per fish: the one in the scene is shared between every
 	# instance, so resizing that would resize every other battler with it.
 	var sphere := SphereShape3D.new()
-	sphere.radius = maxf(height * 0.4, 0.05)
+	sphere.radius = maxf(length * RADIUS_RATIO, 0.05)
 	_shape.shape = sphere
 
 	mass = clampf(fish.weight, MASS_MIN, MASS_MAX)
 
-## Same curve as the held viewmodel, scaled up: the arena is looked at rather
-## than glanced down at, so the fish in it are bigger than in the hand.
-func _world_height() -> float:
+## How long this fish is in world units, nose to tail. Same curve as the held
+## viewmodel, scaled up: the arena is looked at rather than glanced down at, so
+## the fish in it are bigger than the one in the hand.
+func world_length() -> float:
 	if fish == null or fish.size <= 0.0:
-		return BASE_H
-	return clampf(BASE_H * sqrt(fish.size), MIN_H, MAX_H)
+		return BASE_LEN
+	return clampf(BASE_LEN * sqrt(fish.size), MIN_LEN, MAX_LEN)
 
 # -- Stats --------------------------------------------------------------------
 
@@ -222,13 +246,14 @@ func _tick_hit_cooldowns(delta: float) -> void:
 		else:
 			_hit_cooldowns[id] = left
 
-## Counts down to the next flop. A fish in mid-air keeps its timer where it is,
-## so it flops the moment it lands rather than banking hops while flying.
+## Counts down to the next flop. The timer runs in mid-air but only fires on
+## something solid, so a fish that is still bouncing flops the moment it lands
+## instead of throwing itself around from nothing.
 func _tick_flop(delta: float) -> void:
-	if not is_alive() or not _grounded:
+	if not is_alive():
 		return
 	_flop_timer -= delta
-	if _flop_timer > 0.0:
+	if _flop_timer > 0.0 or not _grounded:
 		return
 	_flop_timer = _roll_flop_delay()
 	_flop()
@@ -273,7 +298,7 @@ func _tick_look(delta: float) -> void:
 
 	if _flash_left > 0.0:
 		_flash_left = maxf(0.0, _flash_left - delta)
-		_sprite.modulate = Color.WHITE.lerp(HIT_COLOR, _flash_left / HIT_FLASH)
+		_sprite.modulate = tint.lerp(HIT_COLOR, _flash_left / HIT_FLASH)
 
 	# Flipped rather than turned: turning a flat sprite edge-on makes it vanish.
 	if absf(linear_velocity.x) > 0.15:
@@ -310,5 +335,5 @@ func _on_fish_died() -> void:
 	# It stops flopping and turns belly up, but keeps its physics so it drops
 	# and settles instead of freezing mid-air. The arena frees it when it wants.
 	_sprite.rotation.z = PI
-	_sprite.modulate = Color(0.55, 0.55, 0.60, 1.0)
+	_sprite.modulate = tint.darkened(0.45).lerp(Color(0.55, 0.55, 0.60, 1.0), 0.5)
 	died.emit(self)
