@@ -225,6 +225,8 @@ var _dot_source: BattleFish = null
 var _coward: CowardSpellData = null
 ## Its BoxerSpellData, likewise: the one that moves its magic into its fists.
 var _boxer: BoxerSpellData = null
+## And its ArmourSpellData: the one that takes the edge off a punch.
+var _armour: ArmourSpellData = null
 
 ## The volley a spell left running: what there is still to fire, at what, and
 ## how long the fish hangs there before gravity gets it back.
@@ -289,6 +291,7 @@ func bind_fish(fish_instance: FishInstance) -> void:
 func _read_passives() -> void:
 	_coward = null
 	_boxer = null
+	_armour = null
 	if fish == null:
 		return
 	for spell in fish.spells:
@@ -300,6 +303,9 @@ func _read_passives() -> void:
 		var boxer := spell.data as BoxerSpellData
 		if boxer != null:
 			_boxer = boxer
+		var armour := spell.data as ArmourSpellData
+		if armour != null:
+			_armour = armour
 
 ## Reads the size, weight and icon off the fish and builds the body out of them.
 func _apply_fish() -> void:
@@ -382,6 +388,15 @@ func magic_dmg() -> int:
 		return maxi(0, int(round(fish.magic_dmg * _boxer.magic_scale)))
 	return fish.magic_dmg
 
+## What this fish takes off every physical hit before it lands. 0 for anything
+## not carrying armour, and worked out from magic_dmg() rather than the fish's
+## own stat - so a boxer, having already spent its magic on its fists, keeps
+## only the flat part of it.
+func physical_reduction() -> int:
+	if _armour == null:
+		return 0
+	return _armour.reduction(magic_dmg())
+
 ## The stat a spell of this type scales off, as this body reckons it. Every cast
 ## goes through here rather than reading the FishInstance, so a passive that
 ## rearranges what a fish's stats mean reaches its spells as well as its touches
@@ -398,10 +413,10 @@ func health_ratio() -> float:
 
 ## Takes `amount` off the bound fish and returns what it actually lost. This is
 ## the way every touch gets applied; the shove is away from the fish that landed
-## it.
+## it, and the damage is physical, which is the kind armour is any use against.
 func take_damage(amount: int, from: BattleFish = null) -> int:
 	var origin := from.global_position if from != null and is_instance_valid(from) else NO_ORIGIN
-	return _apply_damage(amount, from, origin, 1.0)
+	return _apply_damage(amount, from, origin, 1.0, true)
 
 ## Drives this fish into the floor and takes health off it. The shove is
 ## straight down rather than away from anything, and the damage itself carries
@@ -410,10 +425,11 @@ func take_damage(amount: int, from: BattleFish = null) -> int:
 ##
 ## A fish already on the floor simply takes the damage: the impulse has nowhere
 ## to put it.
-func slam_down(amount: int, slam_scale: float, from: BattleFish = null) -> int:
+func slam_down(amount: int, slam_scale: float, from: BattleFish = null,
+		physical := false) -> int:
 	if not is_alive():
 		return 0
-	var dealt := _apply_damage(amount, from, NO_ORIGIN, 0.0)
+	var dealt := _apply_damage(amount, from, NO_ORIGIN, 0.0, physical)
 	_shove(Vector3.DOWN, amount, slam_scale, 0.0)
 	return dealt
 
@@ -421,30 +437,37 @@ func slam_down(amount: int, slam_scale: float, from: BattleFish = null) -> int:
 ## something it is already under. `from` is still credited with it, so a health
 ## bar and a battle log can name whoever started it, but the fish is not shoved:
 ## there is no direction for a tick of damage to have come from.
-func take_tick_damage(amount: int, from: BattleFish = null) -> int:
-	return _apply_damage(amount, from, NO_ORIGIN, 0.0)
+func take_tick_damage(amount: int, from: BattleFish = null, physical := false) -> int:
+	return _apply_damage(amount, from, NO_ORIGIN, 0.0, physical)
 
 ## Damage from a point in the world rather than from a fish - a spell's blast.
 ## The shove is outwards from `origin`, so everything caught is thrown away from
 ## the explosion instead of away from whoever set it off, and `knockback_scale`
 ## is how much harder than a touch of the same size it throws.
 func take_blast(amount: int, origin: Vector3, knockback_scale: float = 1.0,
-		from: BattleFish = null) -> int:
-	return _apply_damage(amount, from, origin, knockback_scale)
+		from: BattleFish = null, physical := false) -> int:
+	return _apply_damage(amount, from, origin, knockback_scale, physical)
 
 ## The one place health actually comes off. `origin` is what the fish is shoved
-## away from, NO_ORIGIN for damage that should not move it at all.
+## away from, NO_ORIGIN for damage that should not move it at all, and
+## `physical` says whether armour gets a say in it.
 func _apply_damage(amount: int, from: BattleFish, origin: Vector3,
-		knockback_scale: float) -> int:
+		knockback_scale: float, physical := false) -> int:
 	if not is_alive():
 		return 0
-	var dealt := fish.take_damage(amount)
+	# Armour comes off what the hit is worth, never off what it shoves with: a
+	# sandbagged fish is harder to hurt, not harder to move, and one that shrugs
+	# a touch off entirely still gets knocked about by it.
+	var landed := amount
+	if physical:
+		landed = maxi(0, landed - physical_reduction())
+	var dealt := fish.take_damage(landed)
+	# Knocked back by the size of the hit, not by the health it managed to take
+	# off: a killing blow shoves just as hard when the fish had one point left
+	# as when it had all of them, and a fully absorbed one shoves all the same.
+	_knock_back(amount, origin, knockback_scale)
 	if dealt > 0:
 		_flash_left = HIT_FLASH
-		# Knocked back by the size of the hit, not by the health it managed to
-		# take off: a killing blow shoves just as hard when the fish had one
-		# point left as when it had all of them.
-		_knock_back(amount, origin, knockback_scale)
 		took_damage.emit(dealt, from)
 	return dealt
 
@@ -768,7 +791,7 @@ func _tick_dot(delta: float) -> void:
 	while _dot_ticks > 0 and _dot_timer <= 0.0:
 		_dot_ticks -= 1
 		_dot_timer += interval
-		var dealt := take_tick_damage(_dot_damage, _dot_source)
+		var dealt := take_tick_damage(_dot_damage, _dot_source, not _dot.is_magical())
 		if dealt > 0 and _dot_source != null and is_instance_valid(_dot_source):
 			_dot_source.report_indirect_damage(self, dealt)
 		# The tick that kills clears the effect on its way out - see
@@ -887,7 +910,7 @@ func _tick_overhead() -> void:
 	if damage == SpellInstance.NOT_READY:
 		return
 	cast_spell.emit(spell.data, target)
-	var dealt := target.slam_down(damage, slam.slam_scale, self)
+	var dealt := target.slam_down(damage, slam.slam_scale, self, not slam.is_magical())
 	if dealt > 0:
 		dealt_damage.emit(target, dealt)
 
@@ -1050,7 +1073,8 @@ func _explode(spell: ExplosionSpellData, origin: Vector3, damage: int) -> void:
 		var distance := target.global_position.distance_to(origin)
 		if distance > spell.radius:
 			continue
-		var dealt := target.take_blast(damage, origin, spell.knockback_at(distance), self)
+		var dealt := target.take_blast(damage, origin, spell.knockback_at(distance),
+			self, not spell.is_magical())
 		if dealt > 0:
 			dealt_damage.emit(target, dealt)
 
