@@ -19,6 +19,10 @@ enum Trigger {
 	## What it does there is the spell's own business; BattleFish only spots
 	## the peak and hands the cast over.
 	AT_JUMP_PEAK,
+	## Never cast at all. It is read off the fish and changes how the fish
+	## behaves for as long as it is carried, so cooldown and damage mean
+	## nothing to it.
+	PASSIVE,
 }
 
 @export_category("Base Data")

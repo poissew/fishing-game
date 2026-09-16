@@ -22,7 +22,9 @@ extends RigidBody3D
 ## the same take_damage() a touch uses - the only difference is that a blast
 ## comes from a point in the world rather than from another fish, and so shoves
 ## outwards from it, the caster included. A spell can also wait for the top of a
-## hop instead - see _tick_peak() - and stop the fish there while it fires.
+## hop instead - see _tick_peak() - and stop the fish there while it fires, or
+## never fire at all and simply change how the fish behaves: a PASSIVE, read off
+## the fish once in bind_fish() rather than cast.
 ##
 ## The collider is a capsule lying down the length of the fish, sized off the
 ## icon's own aspect, so the hitbox is the shape of the thing on screen.
@@ -191,6 +193,10 @@ var _grounded := false
 ## Cooldown left per opponent, keyed by instance id.
 var _hit_cooldowns := {}
 
+## The fish's CowardSpellData, if it carries one: read once when the fish is
+## bound rather than looked up every hop. Null for a fish that will fight.
+var _coward: CowardSpellData = null
+
 ## The volley a spell left running: what there is still to fire, at what, and
 ## how long the fish hangs there before gravity gets it back.
 var _volley: BubbleSpellData = null
@@ -241,10 +247,24 @@ func bind_fish(fish_instance: FishInstance) -> void:
 		fish.reset_health()
 		fish.reset_spells()
 		fish.died.connect(_on_fish_died)
+	_read_passives()
 	# bind_fish() is usually called before the body is in the tree, so the
 	# @onready nodes are not there yet - _ready() picks the work back up.
 	if is_node_ready():
 		_apply_fish()
+
+## Picks up the spells that are never cast, only carried. Done once per fish
+## rather than per hop: a passive cannot come or go in the middle of a fight.
+func _read_passives() -> void:
+	_coward = null
+	if fish == null:
+		return
+	for spell in fish.spells:
+		if spell == null:
+			continue
+		var coward := spell.data as CowardSpellData
+		if coward != null:
+			_coward = coward
 
 ## Reads the size, weight and icon off the fish and builds the body out of them.
 func _apply_fish() -> void:
@@ -438,21 +458,37 @@ func _flop() -> void:
 	_wiggle_amount = 1.0
 
 ## A random direction along the floor, pulled towards chase_target by however
-## much of chase_bias the distance leaves in play.
+## much of chase_bias the distance leaves in play - or away from the nearest
+## fish instead, by flee_bias, when this one is a coward.
 func _flop_direction() -> Vector3:
 	var wander := _random_horizontal()
-	if chase_target == null or not is_instance_valid(chase_target) or chase_bias <= 0.0:
+	var bias := chase_bias
+	var focus: Node3D = chase_target
+	if _coward != null:
+		# A coward runs from whoever is actually closest rather than from
+		# whoever the arena pointed it at - the thing about to catch it is the
+		# thing worth running from.
+		bias = _coward.flee_bias
+		var nearest := _nearest_enemy()
+		if nearest != null:
+			focus = nearest
+	if focus == null or not is_instance_valid(focus) or bias <= 0.0:
 		return wander
-	var towards := chase_target.global_position - global_position
+	var towards := focus.global_position - global_position
 	towards.y = 0.0
 	var distance := towards.length()
 	if distance < 0.0001:
 		return wander
-	var bias := chase_bias * _chase_strength(distance)
-	return wander.lerp(towards / distance, bias).normalized()
+	# The same heading either way round: a coward is a chaser with a minus sign.
+	var heading := towards / distance
+	if _coward != null:
+		heading = -heading
+	return wander.lerp(heading, bias * _chase_strength(distance)).normalized()
 
-## How much of chase_bias survives at `distance`: all of it up close, falling
-## off to CHASE_FAR_SCALE of it once the other fish is right across the floor.
+## How much of chase_bias - or of a coward's flee_bias - survives at `distance`:
+## all of it up close, falling off to CHASE_FAR_SCALE of it once the other fish
+## is right across the floor. A fish only commits, to either running at
+## something or away from it, once that something is near.
 func _chase_strength(distance: float) -> float:
 	var closeness := clampf(inverse_lerp(CHASE_FAR, CHASE_NEAR, distance), 0.0, 1.0)
 	return lerpf(CHASE_FAR_SCALE, 1.0, closeness)

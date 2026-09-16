@@ -10,7 +10,8 @@ extends Node3D
 ##
 ##   R / Enter - fresh pair of fighters
 ##   1 / 2     - rematch the same two, healed up
-##   E         - rematch with both of them given every spell there is
+##   E         - rematch with both of them given the next spell in the pool,
+##               and every spell at once on the last press
 ##   Escape    - hand the mouse back, then quit
 ##
 ## The camera keys are listed in free_camera.gd, which does the flying; the
@@ -53,6 +54,9 @@ const SPAWN_Y := 1.2
 var battlers: Array[BattleFish] = []
 ## Set when one of them dies, and read by the HUD for the banner.
 var winner: BattleFish = null
+## Which spell the E key hands out next: an index into TEST_SPELLS, or the size
+## of it for "all of them at once".
+var armed_index := 0
 
 func _ready() -> void:
 	_hud.bind_arena(self)
@@ -79,18 +83,33 @@ func rematch() -> void:
 	_spawn_pair([battlers[0].fish, battlers[1].fish])
 	_hud.log_line("rematch")
 
-## Rematch with both fish carrying every spell in the game, whatever they
-## actually rolled. The only way to see a spell go off on demand.
+## Rematch with both fish carrying a spell they did not roll. One spell at a
+## time, stepping to the next on each press and finishing on the whole pool:
+## handing both fish everything at once includes Coward, and two cowards spend
+## the round running away from each other.
 func armed_rematch() -> void:
 	if battlers.size() < 2:
 		start_round()
+	var handed: Array[SpellData] = []
+	if armed_index >= TEST_SPELLS.size():
+		handed.assign(TEST_SPELLS)
+	else:
+		handed.append(TEST_SPELLS[armed_index])
+	armed_index = (armed_index + 1) % (TEST_SPELLS.size() + 1)
+
 	for battler in battlers:
 		var spells: Array[SpellInstance] = []
-		for spell_data in TEST_SPELLS:
+		for spell_data in handed:
 			spells.append(SpellInstance.create_spell_instance(spell_data))
 		battler.fish.spells = spells
 	_spawn_pair([battlers[0].fish, battlers[1].fish])
-	_hud.log_line("rematch, both armed")
+	_hud.log_line("armed: %s" % _spell_names(handed))
+
+func _spell_names(spells: Array[SpellData]) -> String:
+	var names := PackedStringArray()
+	for spell in spells:
+		names.append(spell.name)
+	return ", ".join(names)
 
 func _spawn_pair(fish: Array) -> void:
 	for child in _fighters.get_children():
