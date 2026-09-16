@@ -1,0 +1,91 @@
+[gd_scene format=3 uid="uid://dp6ot5rec32nh"]
+
+[ext_resource type="Script" uid="uid://bj3gw73dvwv7c" path="res://dev/test_arena.gd" id="1_arena"]
+[ext_resource type="Script" uid="uid://qorl8wl67hde" path="res://dev/arena_hud.gd" id="2_hud"]
+[ext_resource type="Script" uid="uid://cuu7tmxyjvlj" path="res://dev/free_camera.gd" id="3_cam"]
+
+[sub_resource type="Environment" id="Environment_arena"]
+background_mode = 1
+background_color = Color(0.07, 0.09, 0.12, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_floor"]
+size = Vector3(8, 0.4, 5)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_floor"]
+shading_mode = 0
+albedo_color = Color(0.16, 0.22, 0.18, 1)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_floor"]
+size = Vector3(8, 0.4, 5)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_wall_x"]
+size = Vector3(0.4, 1.6, 5.4)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_wall_z"]
+size = Vector3(8.8, 1.6, 0.4)
+
+[node name="TestArena" type="Node3D" unique_id=623940107]
+script = ExtResource("1_arena")
+
+[node name="pixel" type="SubViewportContainer" parent="." unique_id=319241644]
+texture_filter = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+stretch = true
+stretch_shrink = 4
+
+[node name="SubViewport" type="SubViewport" parent="pixel" unique_id=2080452374]
+handle_input_locally = false
+size = Vector2i(480, 270)
+render_target_update_mode = 4
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="pixel/SubViewport" unique_id=1895653465]
+environment = SubResource("Environment_arena")
+
+[node name="Camera3D" type="Camera3D" parent="pixel/SubViewport" unique_id=671132116]
+transform = Transform3D(1, 0, 0, 0, 0.9613, 0.2756, 0, -0.2756, 0.9613, 0, 2.2, 5.2)
+fov = 45.0
+script = ExtResource("3_cam")
+
+[node name="Floor" type="StaticBody3D" parent="pixel/SubViewport" unique_id=953962665]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.2, 0)
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="pixel/SubViewport/Floor" unique_id=984671776]
+mesh = SubResource("BoxMesh_floor")
+surface_material_override/0 = SubResource("StandardMaterial3D_floor")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="pixel/SubViewport/Floor" unique_id=1555421094]
+shape = SubResource("BoxShape3D_floor")
+
+[node name="Walls" type="StaticBody3D" parent="pixel/SubViewport" unique_id=1660752949]
+
+[node name="Left" type="CollisionShape3D" parent="pixel/SubViewport/Walls" unique_id=896477579]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.2, 0.8, 0)
+shape = SubResource("BoxShape3D_wall_x")
+
+[node name="Right" type="CollisionShape3D" parent="pixel/SubViewport/Walls" unique_id=1695225175]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.2, 0.8, 0)
+shape = SubResource("BoxShape3D_wall_x")
+
+[node name="Back" type="CollisionShape3D" parent="pixel/SubViewport/Walls" unique_id=1371673238]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, -2.7)
+shape = SubResource("BoxShape3D_wall_z")
+
+[node name="Front" type="CollisionShape3D" parent="pixel/SubViewport/Walls" unique_id=1063457315]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, 2.7)
+shape = SubResource("BoxShape3D_wall_z")
+
+[node name="Fighters" type="Node3D" parent="pixel/SubViewport" unique_id=812507638]
+
+[node name="HUD" type="Control" parent="pixel/SubViewport" unique_id=1638330458]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("2_hud")
