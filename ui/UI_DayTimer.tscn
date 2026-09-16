@@ -1,0 +1,14 @@
+[gd_scene format=3 uid="uid://dth5760mkcjcn"]
+
+[ext_resource type="Script" uid="uid://cedfct7svhgeh" path="res://classes/ui/UI_DayTimer.gd" id="1_dtime"]
+
+[node name="UI_DayTimer" type="Control" unique_id=1139550178]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("1_dtime")
+font_size = 16

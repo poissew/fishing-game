@@ -9,6 +9,7 @@ var hands:Hands = Hands.new()
 var wallet:Wallet = Wallet.new()
 var shop_ui:UIShop = null
 var clock_ui:UIDayNightIcon = null
+var day_timer_ui:UIDayTimer = null
 ## Shopkeeper whose range the player is standing in, or null.
 var _nearby_shopkeeper: Shopkeeper = null
 
@@ -70,6 +71,10 @@ func _ready() -> void:
 	var clock = load("res://ui/UI_DayNightIcon.tscn")
 	clock_ui = clock.instantiate()
 	add_child(clock_ui)
+
+	var timer = load("res://ui/UI_DayTimer.tscn")
+	day_timer_ui = timer.instantiate()
+	add_child(day_timer_ui)
 
 	var inv = load("res://ui/UI_Inventory.tscn")
 	inventory_ui = inv.instantiate()

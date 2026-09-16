@@ -114,6 +114,11 @@ func phase_progress() -> float:
 		return time / DAY_LENGTH
 	return (time - DAY_LENGTH) / NIGHT_LENGTH
 
+## Real seconds left in the current day, counting down from CYCLE_LENGTH at one
+## dawn to zero at the next. What the HUD countdown reads.
+func time_left_in_day() -> float:
+	return CYCLE_LENGTH - time
+
 ## Real seconds left before the current phase ends.
 func time_until_phase_change() -> float:
 	if is_day():
