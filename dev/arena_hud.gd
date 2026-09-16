@@ -26,6 +26,7 @@ const C_HP_LOW       := Color(0.80, 0.30, 0.25, 1.00)
 const C_DEAD         := Color(0.45, 0.45, 0.50, 1.00)
 const C_WIN          := Color(0.95, 0.85, 0.40, 1.00)
 const C_DOT          := Color(0.72, 0.45, 0.85, 1.00)
+const C_STUN         := Color(1.00, 0.95, 0.55, 1.00)
 const C_CLOCK        := Color(0.62, 0.80, 0.56, 1.00)
 const C_SUDDEN       := Color(0.90, 0.35, 0.30, 1.00)
 
@@ -91,13 +92,17 @@ func _draw_card(at: Vector2, battler: BattleFish) -> void:
 	draw_string(font, Vector2(left, at.y + PAD + UIFont.CAP_H), fish.data.name,
 		HORIZONTAL_ALIGNMENT_LEFT, -1, UIFont.SIZE, name_color)
 
-	# Whatever is ticking on this fish, right-aligned on the name row: how many
-	# ticks are left and what one of them costs.
+	# Whatever is on this fish, right-aligned on the name row. Stun first,
+	# because a fish that cannot act is the more urgent news; with a long name
+	# and both at once the two can touch, which is a dev readout's problem and
+	# not worth a second row.
+	var status_x := at.x + CARD_W - PAD
 	if battler.dot_ticks_left() > 0:
-		var dot := "DOT %dx%d" % [battler.dot_ticks_left(), battler.dot_damage()]
-		var dot_w := font.get_string_size(dot, HORIZONTAL_ALIGNMENT_LEFT, -1, UIFont.SIZE).x
-		draw_string(font, Vector2(at.x + CARD_W - PAD - dot_w, at.y + PAD + UIFont.CAP_H),
-			dot, HORIZONTAL_ALIGNMENT_LEFT, -1, UIFont.SIZE, C_DOT)
+		status_x = _draw_status(font, status_x, at.y + PAD + UIFont.CAP_H,
+			"DOT %dx%d" % [battler.dot_ticks_left(), battler.dot_damage()], C_DOT)
+	if battler.is_stunned():
+		status_x = _draw_status(font, status_x, at.y + PAD + UIFont.CAP_H,
+			"STUN %.1f" % battler.stun_left(), C_STUN)
 	draw_string(font, Vector2(left, at.y + PAD + LINE_H + UIFont.CAP_H),
 		"%.2fm  PHYS %d  MAG %d" % [fish.size, battler.phys_dmg(), battler.magic_dmg()],
 		HORIZONTAL_ALIGNMENT_LEFT, -1, UIFont.SIZE, C_STAT)
@@ -115,6 +120,15 @@ func _draw_card(at: Vector2, battler: BattleFish) -> void:
 	draw_string(font, Vector2(bar.position.x + (bar.size.x - hp_w) * 0.5,
 			bar.position.y + (BAR_H + UIFont.CAP_H) * 0.5),
 		hp, HORIZONTAL_ALIGNMENT_LEFT, -1, UIFont.SIZE, C_TEXT)
+
+## One status tag, right-aligned ending at `right`. Returns where the next one
+## to its left should end.
+func _draw_status(font: Font, right: float, baseline: float, text: String,
+		color: Color) -> float:
+	var width := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, UIFont.SIZE).x
+	draw_string(font, Vector2(right - width, baseline),
+		text, HORIZONTAL_ALIGNMENT_LEFT, -1, UIFont.SIZE, color)
+	return right - width - PAD
 
 # -- Round clock ---------------------------------------------------------------
 

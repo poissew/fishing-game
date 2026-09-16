@@ -4,9 +4,11 @@
 
 [resource]
 script = ExtResource("1_bubl")
+damage_scale = 0.3
+base_speed = 2.0
+speed_per_power = 0.4
 name = "Bubble Blast"
 description = "At the top of its next hop the fish hangs there and spits three bubbles at whatever it is fighting. Slow enough to be dodged."
 trigger = 2
-base_power = 2
 base_type = 3
 base_cooldown = 5

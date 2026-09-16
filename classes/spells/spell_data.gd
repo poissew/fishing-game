@@ -9,6 +9,12 @@ extends Resource
 const POWER_SCALE := 10.0
 
 ## What makes a spell go off.
+##
+## **Only ever append to this.** Godot writes an enum into a .tres as the plain
+## int, so slipping a new trigger in among the existing ones silently re-points
+## every resource after it - the first draft of WHEN_READY went in above
+## WHEN_OVER_TARGET and turned Ground Slam into a spell that waited for a moment
+## no one ever handed it.
 enum Trigger {
 	## Fired by whatever is driving the fight, whenever it decides to.
 	MANUAL,
@@ -27,6 +33,9 @@ enum Trigger {
 	## than a moment: BattleFish looks for one every frame and hands the cast
 	## over whenever it finds one, so the cooldown is all that paces it.
 	WHEN_OVER_TARGET,
+	## Goes off the moment it is off cooldown, with nothing to wait for and
+	## nothing to aim at. The cooldown is the whole of the pacing.
+	WHEN_READY,
 }
 
 @export_category("Base Data")

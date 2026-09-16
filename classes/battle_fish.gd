@@ -63,6 +63,12 @@ const MAX_LEN  := 2.20
 ## worth speaking of.
 const MIN_RADIUS := 0.03
 
+## Tint a stunned fish is washed out towards, and how much of it is mixed in.
+## It has to read at a glance: a fish standing still because it is stunned and a
+## fish standing still because nothing is happening look the same otherwise.
+const STUN_COLOR := Color(1.0, 0.95, 0.55, 1.0)
+const STUN_TINT_MIX := 0.65
+
 ## Tint flashed on the sprite when the fish is hit, and how long it fades over.
 const HIT_COLOR := Color(1.0, 0.35, 0.35, 1.0)
 const HIT_FLASH := 0.18
@@ -152,6 +158,8 @@ signal dealt_damage(target: BattleFish, amount: int)
 ## Fired when this fish loses health. `from` is the fish that did it, or null
 ## for damage that came from somewhere else.
 signal took_damage(amount: int, from: BattleFish)
+## Fired when this fish is stunned, with how long it is out of action for.
+signal stunned(seconds: float)
 ## Fired when this fish spends a spell, before the spell's damage lands.
 ## `target` is the fish whose touch set an ON_HIT spell off, null otherwise.
 signal cast_spell(spell: SpellData, target: BattleFish)
@@ -195,6 +203,11 @@ var _flop_timer := 0.0
 var _grounded := false
 ## Cooldown left per opponent, keyed by instance id.
 var _hit_cooldowns := {}
+
+## Seconds of stun left. A stunned fish does nothing whatsoever - no flopping,
+## no casting, and no damage to whatever walks into it - but it can still be
+## hurt, and anything already ticking on it keeps ticking.
+var _stun_left := 0.0
 
 ## The damage-over-time effect this fish is under, if any. One slot rather than
 ## one per attacker: a second application - from anyone - multiplies what is
@@ -261,6 +274,7 @@ func bind_fish(fish_instance: FishInstance) -> void:
 		fish.reset_spells()
 		fish.died.connect(_on_fish_died)
 	_clear_dot()
+	_stun_left = 0.0
 	_read_passives()
 	# bind_fish() is usually called before the body is in the tree, so the
 	# @onready nodes are not there yet - _ready() picks the work back up.
@@ -319,6 +333,12 @@ func _sprite_height(length: float) -> float:
 	if texture == null or texture.get_width() <= 0:
 		return length
 	return length * float(texture.get_height()) / float(texture.get_width())
+
+## The way the fish is drawn facing, as a direction along the floor. Sprites in
+## this game face the camera and are flipped rather than turned, so which way a
+## fish is pointing is a bool and this is the only "in front of it" there is.
+func facing() -> Vector3:
+	return Vector3.LEFT if _sprite != null and _sprite.flip_h else Vector3.RIGHT
 
 ## How long this fish is in world units, nose to tail. Same curve as the held
 ## viewmodel, scaled up: the arena is looked at rather than glanced down at, so
@@ -451,6 +471,7 @@ func can_hit(other: BattleFish) -> bool:
 
 func _physics_process(delta: float) -> void:
 	_tick_hit_cooldowns(delta)
+	_tick_stun(delta)
 	_tick_dot(delta)
 	if fish != null and is_alive():
 		fish.tick_spells(delta)
@@ -458,6 +479,7 @@ func _physics_process(delta: float) -> void:
 	_tick_flop(delta)
 	_tick_peak()
 	_tick_overhead()
+	_tick_ready_spells()
 	_tick_look(delta)
 	# Last thing in the frame, so it is the velocity going into the step the
 	# next contact will come out of, and so _tick_peak() above still had the
@@ -485,7 +507,7 @@ func _tick_hit_cooldowns(delta: float) -> void:
 ## something solid, so a fish that is still bouncing flops the moment it lands
 ## instead of throwing itself around from nothing.
 func _tick_flop(delta: float) -> void:
-	if not is_alive() or _hang_left > 0.0:
+	if not is_alive() or _hang_left > 0.0 or is_stunned():
 		return
 	_flop_timer -= delta
 	if _flop_timer > 0.0 or not _grounded:
@@ -565,6 +587,11 @@ func _tick_look(delta: float) -> void:
 	if _flash_left > 0.0:
 		_flash_left = maxf(0.0, _flash_left - delta)
 		_sprite.modulate = tint.lerp(HIT_COLOR, _flash_left / HIT_FLASH)
+	elif is_stunned():
+		# Washed out, the way anything looks after a camera has gone off in it.
+		_sprite.modulate = tint.lerp(STUN_COLOR, STUN_TINT_MIX)
+	else:
+		_sprite.modulate = tint
 
 	# Flipped rather than turned: turning a flat sprite edge-on makes it vanish.
 	if absf(linear_velocity.x) > 0.15:
@@ -614,7 +641,9 @@ func _on_body_entered(body: Node) -> void:
 ## nothing, and a spell it carries that goes off on a hit should still go off.
 ## Only the damage is nullified, not the fish's ability to touch anything.
 func _hit(other: BattleFish) -> bool:
-	if not can_hit(other):
+	# A stunned fish is not hitting anything, though anything may hit it: the
+	# other side of this collision runs its own _hit() and is unaffected.
+	if is_stunned() or not can_hit(other):
 		return false
 	var id := other.get_instance_id()
 	if _hit_cooldowns.has(id):
@@ -638,7 +667,7 @@ func _hit(other: BattleFish) -> bool:
 ## spell is gated by its own cooldown and nothing else, so a fish carrying two
 ## of them gets both on the same touch.
 func _cast_on_hit(other: BattleFish, landed: bool) -> void:
-	if fish == null or not is_alive():
+	if fish == null or not is_alive() or is_stunned():
 		return
 	for spell in fish.ready_spells(SpellData.Trigger.ON_HIT):
 		if spell.data.needs_hit and not landed:
@@ -660,6 +689,30 @@ func _apply_on_hit(data: SpellData, other: BattleFish, damage: int) -> void:
 	# needs_hit is what guarantees there is an `other` here at all.
 	if dot != null and other != null and is_instance_valid(other):
 		other.apply_dot(dot, damage, self)
+
+# -- Stun ---------------------------------------------------------------------
+
+## Puts this fish out of action for `seconds`. The longest stun wins rather than
+## them adding up, so a flash from across the room cannot extend one that landed
+## point blank.
+func stun(seconds: float) -> void:
+	if not is_alive() or seconds <= 0.0:
+		return
+	_stun_left = maxf(_stun_left, seconds)
+	# Whatever it was in the middle of, it is not any more.
+	_end_hang()
+	stunned.emit(_stun_left)
+
+func is_stunned() -> bool:
+	return _stun_left > 0.0
+
+## Seconds of it left, for a readout.
+func stun_left() -> float:
+	return _stun_left
+
+func _tick_stun(delta: float) -> void:
+	if _stun_left > 0.0:
+		_stun_left = maxf(0.0, _stun_left - delta)
 
 # -- Damage over time ---------------------------------------------------------
 
@@ -728,18 +781,74 @@ func report_indirect_damage(target: BattleFish, amount: int) -> void:
 ## Spots the top of a hop: rising the frame before, no longer rising now, and
 ## nothing underfoot. That is the moment a spell waiting on AT_JUMP_PEAK gets.
 func _tick_peak() -> void:
-	if _grounded or _hang_left > 0.0 or not is_alive():
+	if _grounded or _hang_left > 0.0 or not is_alive() or is_stunned():
 		return
 	if _approach_velocity.y <= PEAK_RISE or linear_velocity.y > 0.0:
 		return
 	_cast_at_peak()
+
+## Fires anything that simply goes off the moment it is ready - no moment to
+## catch, no condition to meet, nothing to aim at. The cooldown is all of it.
+func _tick_ready_spells() -> void:
+	if fish == null or not is_alive() or is_stunned() or _hang_left > 0.0:
+		return
+	for spell in fish.ready_spells(SpellData.Trigger.WHEN_READY):
+		var camera := spell.data as PaparazziSpellData
+		if camera == null:
+			continue
+		if spell.try_cast(fish) == SpellInstance.NOT_READY:
+			continue
+		# No target: the camera goes off whether or not anybody is in the shot.
+		cast_spell.emit(spell.data, null)
+		_flash(camera)
+
+## Sets a camera off in front of the fish and leaves standing anything it may
+## hit that was caught in the cone - the closer it was, the longer for.
+func _flash(spell: PaparazziSpellData) -> void:
+	var direction := _flash_direction(spell)
+	SpellFlash.burst(_effect_parent(),
+		global_position + direction * world_length() * 0.5, spell)
+	for node in get_tree().get_nodes_in_group(GROUP):
+		var other := node as BattleFish
+		if other == null or not can_hit(other):
+			continue
+		var offset := other.global_position - global_position
+		offset.y = 0.0
+		var distance := offset.length()
+		if distance > spell.max_range:
+			continue
+		# Point blank: whatever is against the lens is in the shot, whichever
+		# way round the two of them are.
+		if distance > 0.0001 \
+				and rad_to_deg(direction.angle_to(offset / distance)) > spell.spread_degrees:
+			continue
+		other.stun(spell.stun_for(distance))
+
+## Where the camera gets pointed: at the nearest fish worth photographing when
+## one is in range, and straight ahead when there is not.
+##
+## A fish in this game is always drawn facing the camera and flipped rather than
+## turned, so its "forwards" is only ever the way it was last thrown - which is
+## hardly ever at its opponent. Fired strictly down that line the spell barely
+## existed: 50 flashes over 120 seconds of arena landed **one** stun. Turning to
+## face the subject is what a photographer does anyway, and the cone still
+## decides who else is in the shot.
+func _flash_direction(spell: PaparazziSpellData) -> Vector3:
+	var subject := _nearest_enemy()
+	if subject == null:
+		return facing()
+	var aim := subject.global_position - global_position
+	aim.y = 0.0
+	if aim.length() > spell.max_range or aim.length_squared() < 0.0001:
+		return facing()
+	return aim.normalized()
 
 ## Fires a spell that waits for this fish to be standing over somebody. Unlike
 ## the peak, which is a moment and gone, this is a condition: it is true for as
 ## long as the other fish is under this one, so the spell's own cooldown is the
 ## only thing pacing it.
 func _tick_overhead() -> void:
-	if fish == null or not is_alive() or _hang_left > 0.0:
+	if fish == null or not is_alive() or _hang_left > 0.0 or is_stunned():
 		return
 	var ready := fish.ready_spells(SpellData.Trigger.WHEN_OVER_TARGET)
 	if ready.is_empty():

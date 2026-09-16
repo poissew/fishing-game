@@ -137,6 +137,7 @@ func _spawn_pair(fish: Array) -> void:
 		battler.position = Vector3(SPAWN_X if i == 1 else -SPAWN_X, SPAWN_Y, 0.0)
 		battler.dealt_damage.connect(_on_dealt_damage.bind(battler))
 		battler.cast_spell.connect(_on_cast_spell.bind(battler))
+		battler.stunned.connect(_on_stunned.bind(battler))
 		battler.died.connect(_on_battler_died)
 		_fighters.add_child(battler)
 		battlers.append(battler)
@@ -162,6 +163,9 @@ func _on_dealt_damage(target: BattleFish, amount: int, attacker: BattleFish) -> 
 
 func _on_cast_spell(spell: SpellData, _target: BattleFish, caster: BattleFish) -> void:
 	_hud.log_line("%s casts %s" % [caster.fish.data.name, spell.name])
+
+func _on_stunned(seconds: float, battler: BattleFish) -> void:
+	_hud.log_line("%s is seeing spots for %.1fs" % [battler.fish.data.name, seconds])
 
 func _on_battler_died(battler: BattleFish) -> void:
 	# Deferred: `died` comes out of take_damage(), so it beats the attacker's
