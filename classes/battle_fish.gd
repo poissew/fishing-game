@@ -64,6 +64,12 @@ const MAX_LEN  := 2.20
 ## worth speaking of.
 const MIN_RADIUS := 0.03
 
+## Tint a fish on its last legs is washed out towards, and how much of it is
+## mixed in. Paler than the stun, and it beats the stun when a fish is somehow
+## both: being about to die is the more urgent news.
+const LAST_STAND_COLOR := Color(0.85, 0.95, 1.00, 1.0)
+const LAST_STAND_TINT_MIX := 0.70
+
 ## Tint a stunned fish is washed out towards, and how much of it is mixed in.
 ## It has to read at a glance: a fish standing still because it is stunned and a
 ## fish standing still because nothing is happening look the same otherwise.
@@ -159,6 +165,9 @@ signal dealt_damage(target: BattleFish, amount: int)
 ## Fired when this fish loses health. `from` is the fish that did it, or null
 ## for damage that came from somewhere else.
 signal took_damage(amount: int, from: BattleFish)
+## Fired when the blow that would have killed this fish is held off instead,
+## with how long it has left on its feet.
+signal last_stand_started(seconds: float)
 ## Fired when this fish is stunned, with how long it is out of action for.
 signal stunned(seconds: float)
 ## Fired when this fish spends a spell, before the spell's damage lands.
@@ -227,6 +236,14 @@ var _coward: CowardSpellData = null
 var _boxer: BoxerSpellData = null
 ## And its ArmourSpellData: the one that takes the edge off a punch.
 var _armour: ArmourSpellData = null
+## And its LastStandSpellData: the one that refuses the killing blow, once.
+var _last_stand: LastStandSpellData = null
+
+## Seconds left of that stay of execution, and whether it has been spent. The
+## fish cannot be taken below one point of health while the first is running,
+## and cannot have it again once the second is true.
+var _last_stand_left := 0.0
+var _last_stand_used := false
 
 ## The volley a spell left running: what there is still to fire, at what, and
 ## how long the fish hangs there before gravity gets it back.
@@ -284,6 +301,9 @@ func bind_fish(fish_instance: FishInstance) -> void:
 		fish.died.connect(_on_fish_died)
 	_clear_dot()
 	_stun_left = 0.0
+	# A fish sent into the arena again gets its refusal back with its health.
+	_last_stand_left = 0.0
+	_last_stand_used = false
 	_read_passives()
 	# bind_fish() is usually called before the body is in the tree, so the
 	# @onready nodes are not there yet - _ready() picks the work back up.
@@ -296,6 +316,7 @@ func _read_passives() -> void:
 	_coward = null
 	_boxer = null
 	_armour = null
+	_last_stand = null
 	if fish == null:
 		return
 	for spell in fish.spells:
@@ -310,6 +331,9 @@ func _read_passives() -> void:
 		var armour := spell.data as ArmourSpellData
 		if armour != null:
 			_armour = armour
+		var last_stand := spell.data as LastStandSpellData
+		if last_stand != null:
+			_last_stand = last_stand
 
 ## Reads the size, weight and icon off the fish and builds the body out of them.
 func _apply_fish() -> void:
@@ -381,6 +405,10 @@ func phys_dmg() -> int:
 		power += int(round(fish.magic_dmg * _boxer.conversion))
 	if _coward != null:
 		power = int(round(power * _coward.phys_scale))
+	# Last of all, and on whatever the rest of them left: a fish on its way out
+	# swings with a tenth of what it had, not a tenth of what it started with.
+	if is_in_last_stand():
+		power = int(round(power * _last_stand.power_scale))
 	return maxi(0, power)
 
 ## Damage this fish's spells scale off, once its passives have had their say: a
@@ -388,9 +416,12 @@ func phys_dmg() -> int:
 func magic_dmg() -> int:
 	if fish == null:
 		return 0
+	var power := fish.magic_dmg
 	if _boxer != null:
-		return maxi(0, int(round(fish.magic_dmg * _boxer.magic_scale)))
-	return fish.magic_dmg
+		power = int(round(power * _boxer.magic_scale))
+	if is_in_last_stand():
+		power = int(round(power * _last_stand.power_scale))
+	return maxi(0, power)
 
 ## What this fish takes off every physical hit before it lands. 0 for anything
 ## not carrying armour, and worked out from magic_dmg() rather than the fish's
@@ -465,6 +496,9 @@ func _apply_damage(amount: int, from: BattleFish, origin: Vector3,
 	var landed := amount
 	if physical:
 		landed = maxi(0, landed - physical_reduction())
+	# Immunity: the blow that would have finished it starts a stay of execution
+	# instead, and nothing gets through that last point while it runs.
+	landed = _refuse_killing_blow(landed)
 	var dealt := fish.take_damage(landed)
 	# Knocked back by the size of the hit, not by the health it managed to take
 	# off: a killing blow shoves just as hard when the fish had one point left
@@ -521,6 +555,7 @@ func can_hit(other: BattleFish) -> bool:
 
 func _physics_process(delta: float) -> void:
 	_tick_hit_cooldowns(delta)
+	_tick_last_stand(delta)
 	_tick_stun(delta)
 	_tick_dot(delta)
 	if fish != null and is_alive():
@@ -638,6 +673,10 @@ func _tick_look(delta: float) -> void:
 	if _flash_left > 0.0:
 		_flash_left = maxf(0.0, _flash_left - delta)
 		_sprite.modulate = tint.lerp(HIT_COLOR, _flash_left / HIT_FLASH)
+	elif is_in_last_stand():
+		# Gone pale, and ahead of the stun: a fish about to die reads as that
+		# first and as dazzled second.
+		_sprite.modulate = tint.lerp(LAST_STAND_COLOR, LAST_STAND_TINT_MIX)
 	elif is_stunned():
 		# Washed out, the way anything looks after a camera has gone off in it.
 		_sprite.modulate = tint.lerp(STUN_COLOR, STUN_TINT_MIX)
@@ -740,6 +779,49 @@ func _apply_on_hit(data: SpellData, other: BattleFish, damage: int) -> void:
 	# needs_hit is what guarantees there is an `other` here at all.
 	if dot != null and other != null and is_instance_valid(other):
 		other.apply_dot(dot, damage, self)
+
+# -- Last stand ---------------------------------------------------------------
+
+## Caps `amount` at whatever would leave the fish on one point of health, when
+## it is carrying Immunity and this blow would otherwise finish it - and starts
+## the clock, or keeps it if one is already running. Returns the damage that may
+## actually be taken.
+##
+## Everything runs through _apply_damage(), so there is no way to be killed that
+## does not come past here: a touch, a blast, a burn, the arena's own drain.
+func _refuse_killing_blow(amount: int) -> int:
+	if _last_stand == null or fish == null:
+		return amount
+	# Not fatal: nothing to refuse.
+	if amount < fish.current_health:
+		return amount
+	if is_in_last_stand():
+		return maxi(0, fish.current_health - 1)
+	if _last_stand_used:
+		return amount
+	_last_stand_used = true
+	_last_stand_left = maxf(_last_stand.duration, 0.01)
+	last_stand_started.emit(_last_stand_left)
+	return maxi(0, fish.current_health - 1)
+
+## Counts the stay of execution down, and collects on it when it runs out. The
+## fish dies here of the blow it was holding off - through the ordinary damage
+## path, so the death is reported the way any other is.
+func _tick_last_stand(delta: float) -> void:
+	if _last_stand_left <= 0.0:
+		return
+	_last_stand_left = maxf(0.0, _last_stand_left - delta)
+	if _last_stand_left > 0.0:
+		return
+	if fish != null and fish.is_alive():
+		take_tick_damage(fish.current_health)
+
+func is_in_last_stand() -> bool:
+	return _last_stand_left > 0.0
+
+## Seconds of it left, for a readout.
+func last_stand_left() -> float:
+	return _last_stand_left
 
 # -- Stun ---------------------------------------------------------------------
 
@@ -1133,6 +1215,7 @@ func _on_fish_died() -> void:
 	_dead = true
 	_hit_cooldowns.clear()
 	_clear_dot()
+	_last_stand_left = 0.0
 	# Frozen in mid-air firing bubbles when it died: let it drop.
 	_end_hang()
 	# It stops flopping and turns belly up - _sprite_roll() handles the turn -

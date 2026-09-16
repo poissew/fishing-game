@@ -14,6 +14,7 @@ const SPELL_POOL := [
 	preload("res://data/spells/boxer.tres"),
 	preload("res://data/spells/sandbag.tres"),
 	preload("res://data/spells/wildfire.tres"),
+	preload("res://data/spells/immunity.tres"),
 ]
 
 enum Rarity {
