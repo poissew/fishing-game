@@ -18,7 +18,8 @@ extends RigidBody3D
 ##
 ## Spells ride on the FishInstance and are cast from here. A spell that
 ## triggers ON_HIT goes off on the next thing this fish runs into, fish or wall
-## or floor, rolls its damage through SpellInstance.try_cast() and feeds it into
+## or floor, rolls its damage through SpellInstance.try_cast_at() - on the stats
+## this body reckons it has, passives and all, see caster_power() - and feeds it into
 ## the same take_damage() a touch uses - the only difference is that a blast
 ## comes from a point in the world rather than from another fish, and so shoves
 ## outwards from it, the caster included. A spell can also wait for the top of a
@@ -222,6 +223,10 @@ var _dot_source: BattleFish = null
 ## The fish's CowardSpellData, if it carries one: read once when the fish is
 ## bound rather than looked up every hop. Null for a fish that will fight.
 var _coward: CowardSpellData = null
+## Its BoxerSpellData, likewise: the one that moves its magic into its fists.
+var _boxer: BoxerSpellData = null
+## And its ArmourSpellData: the one that takes the edge off a punch.
+var _armour: ArmourSpellData = null
 
 ## The volley a spell left running: what there is still to fire, at what, and
 ## how long the fish hangs there before gravity gets it back.
@@ -231,6 +236,10 @@ var _volley_damage := 0
 var _volley_shots := 0
 var _volley_timer := 0.0
 var _hang_left := 0.0
+
+## Whether the fish had something under it last frame, so that the moment it
+## gets something under it again can be told from simply resting on the floor.
+var _was_grounded := false
 
 ## The fish's velocity from before the physics step it is now being told about.
 ## By the time body_entered fires, the solver has already bounced the fish off
@@ -285,6 +294,8 @@ func bind_fish(fish_instance: FishInstance) -> void:
 ## rather than per hop: a passive cannot come or go in the middle of a fight.
 func _read_passives() -> void:
 	_coward = null
+	_boxer = null
+	_armour = null
 	if fish == null:
 		return
 	for spell in fish.spells:
@@ -293,6 +304,12 @@ func _read_passives() -> void:
 		var coward := spell.data as CowardSpellData
 		if coward != null:
 			_coward = coward
+		var boxer := spell.data as BoxerSpellData
+		if boxer != null:
+			_boxer = boxer
+		var armour := spell.data as ArmourSpellData
+		if armour != null:
+			_armour = armour
 
 ## Reads the size, weight and icon off the fish and builds the body out of them.
 func _apply_fish() -> void:
@@ -350,21 +367,46 @@ func world_length() -> float:
 
 # -- Stats --------------------------------------------------------------------
 
-## Damage this fish deals on contact. A coward deals a share of it - none, by
-## default: it will not fight, and that is the price of the spell. The fish's
-## own phys_dmg is left alone, so what a spell scaling off it does is unchanged
-## and the selection screen still reports the catch honestly.
+## Damage this fish deals on contact, once its passives have had their say: a
+## boxer folds its magic damage in here, a coward keeps a share of the result -
+## none, by default, because it will not fight.
+##
+## The FishInstance's own phys_dmg is left alone either way, so the selection
+## screen still reports the catch honestly. This is the number the arena uses.
 func phys_dmg() -> int:
 	if fish == null:
 		return 0
+	var power := fish.phys_dmg
+	if _boxer != null:
+		power += int(round(fish.magic_dmg * _boxer.conversion))
 	if _coward != null:
-		return int(round(fish.phys_dmg * _coward.phys_scale))
-	return fish.phys_dmg
+		power = int(round(power * _coward.phys_scale))
+	return maxi(0, power)
 
-## Damage this fish's spells scale off. SpellInstance takes the FishInstance
-## itself and picks this or phys_dmg depending on the spell's type.
+## Damage this fish's spells scale off, once its passives have had their say: a
+## boxer has spent it on its fists and has none of it left.
 func magic_dmg() -> int:
-	return fish.magic_dmg if fish != null else 0
+	if fish == null:
+		return 0
+	if _boxer != null:
+		return maxi(0, int(round(fish.magic_dmg * _boxer.magic_scale)))
+	return fish.magic_dmg
+
+## What this fish takes off every physical hit before it lands. 0 for anything
+## not carrying armour, and worked out from magic_dmg() rather than the fish's
+## own stat - so a boxer, having already spent its magic on its fists, keeps
+## only the flat part of it.
+func physical_reduction() -> int:
+	if _armour == null:
+		return 0
+	return _armour.reduction(magic_dmg())
+
+## The stat a spell of this type scales off, as this body reckons it. Every cast
+## goes through here rather than reading the FishInstance, so a passive that
+## rearranges what a fish's stats mean reaches its spells as well as its touches
+## - a boxer's blast is worth nothing because a boxer has no magic left.
+func caster_power(data: SpellData) -> int:
+	return magic_dmg() if data.is_magical() else phys_dmg()
 
 func is_alive() -> bool:
 	return fish != null and fish.is_alive() and not _dead
@@ -375,10 +417,10 @@ func health_ratio() -> float:
 
 ## Takes `amount` off the bound fish and returns what it actually lost. This is
 ## the way every touch gets applied; the shove is away from the fish that landed
-## it.
+## it, and the damage is physical, which is the kind armour is any use against.
 func take_damage(amount: int, from: BattleFish = null) -> int:
 	var origin := from.global_position if from != null and is_instance_valid(from) else NO_ORIGIN
-	return _apply_damage(amount, from, origin, 1.0)
+	return _apply_damage(amount, from, origin, 1.0, true)
 
 ## Drives this fish into the floor and takes health off it. The shove is
 ## straight down rather than away from anything, and the damage itself carries
@@ -387,10 +429,11 @@ func take_damage(amount: int, from: BattleFish = null) -> int:
 ##
 ## A fish already on the floor simply takes the damage: the impulse has nowhere
 ## to put it.
-func slam_down(amount: int, slam_scale: float, from: BattleFish = null) -> int:
+func slam_down(amount: int, slam_scale: float, from: BattleFish = null,
+		physical := false) -> int:
 	if not is_alive():
 		return 0
-	var dealt := _apply_damage(amount, from, NO_ORIGIN, 0.0)
+	var dealt := _apply_damage(amount, from, NO_ORIGIN, 0.0, physical)
 	_shove(Vector3.DOWN, amount, slam_scale, 0.0)
 	return dealt
 
@@ -398,30 +441,37 @@ func slam_down(amount: int, slam_scale: float, from: BattleFish = null) -> int:
 ## something it is already under. `from` is still credited with it, so a health
 ## bar and a battle log can name whoever started it, but the fish is not shoved:
 ## there is no direction for a tick of damage to have come from.
-func take_tick_damage(amount: int, from: BattleFish = null) -> int:
-	return _apply_damage(amount, from, NO_ORIGIN, 0.0)
+func take_tick_damage(amount: int, from: BattleFish = null, physical := false) -> int:
+	return _apply_damage(amount, from, NO_ORIGIN, 0.0, physical)
 
 ## Damage from a point in the world rather than from a fish - a spell's blast.
 ## The shove is outwards from `origin`, so everything caught is thrown away from
 ## the explosion instead of away from whoever set it off, and `knockback_scale`
 ## is how much harder than a touch of the same size it throws.
 func take_blast(amount: int, origin: Vector3, knockback_scale: float = 1.0,
-		from: BattleFish = null) -> int:
-	return _apply_damage(amount, from, origin, knockback_scale)
+		from: BattleFish = null, physical := false) -> int:
+	return _apply_damage(amount, from, origin, knockback_scale, physical)
 
 ## The one place health actually comes off. `origin` is what the fish is shoved
-## away from, NO_ORIGIN for damage that should not move it at all.
+## away from, NO_ORIGIN for damage that should not move it at all, and
+## `physical` says whether armour gets a say in it.
 func _apply_damage(amount: int, from: BattleFish, origin: Vector3,
-		knockback_scale: float) -> int:
+		knockback_scale: float, physical := false) -> int:
 	if not is_alive():
 		return 0
-	var dealt := fish.take_damage(amount)
+	# Armour comes off what the hit is worth, never off what it shoves with: a
+	# sandbagged fish is harder to hurt, not harder to move, and one that shrugs
+	# a touch off entirely still gets knocked about by it.
+	var landed := amount
+	if physical:
+		landed = maxi(0, landed - physical_reduction())
+	var dealt := fish.take_damage(landed)
+	# Knocked back by the size of the hit, not by the health it managed to take
+	# off: a killing blow shoves just as hard when the fish had one point left
+	# as when it had all of them, and a fully absorbed one shoves all the same.
+	_knock_back(amount, origin, knockback_scale)
 	if dealt > 0:
 		_flash_left = HIT_FLASH
-		# Knocked back by the size of the hit, not by the health it managed to
-		# take off: a killing blow shoves just as hard when the fish had one
-		# point left as when it had all of them.
-		_knock_back(amount, origin, knockback_scale)
 		took_damage.emit(dealt, from)
 	return dealt
 
@@ -478,6 +528,7 @@ func _physics_process(delta: float) -> void:
 	_tick_volley(delta)
 	_tick_flop(delta)
 	_tick_peak()
+	_tick_landing()
 	_tick_overhead()
 	_tick_ready_spells()
 	_tick_look(delta)
@@ -672,7 +723,7 @@ func _cast_on_hit(other: BattleFish, landed: bool) -> void:
 	for spell in fish.ready_spells(SpellData.Trigger.ON_HIT):
 		if spell.data.needs_hit and not landed:
 			continue
-		var damage := spell.try_cast(fish)
+		var damage := spell.try_cast_at(caster_power(spell.data))
 		if damage == SpellInstance.NOT_READY:
 			continue
 		cast_spell.emit(spell.data, other)
@@ -745,7 +796,7 @@ func _tick_dot(delta: float) -> void:
 	while _dot_ticks > 0 and _dot_timer <= 0.0:
 		_dot_ticks -= 1
 		_dot_timer += interval
-		var dealt := take_tick_damage(_dot_damage, _dot_source)
+		var dealt := take_tick_damage(_dot_damage, _dot_source, not _dot.is_magical())
 		if dealt > 0 and _dot_source != null and is_instance_valid(_dot_source):
 			_dot_source.report_indirect_damage(self, dealt)
 		# The tick that kills clears the effect on its way out - see
@@ -796,7 +847,7 @@ func _tick_ready_spells() -> void:
 		var camera := spell.data as PaparazziSpellData
 		if camera == null:
 			continue
-		if spell.try_cast(fish) == SpellInstance.NOT_READY:
+		if spell.try_cast_at(caster_power(spell.data)) == SpellInstance.NOT_READY:
 			continue
 		# No target: the camera goes off whether or not anybody is in the shot.
 		cast_spell.emit(spell.data, null)
@@ -860,11 +911,11 @@ func _tick_overhead() -> void:
 	var target := _target_below(slam)
 	if target == null:
 		return
-	var damage := spell.try_cast(fish)
+	var damage := spell.try_cast_at(caster_power(spell.data))
 	if damage == SpellInstance.NOT_READY:
 		return
 	cast_spell.emit(spell.data, target)
-	var dealt := target.slam_down(damage, slam.slam_scale, self)
+	var dealt := target.slam_down(damage, slam.slam_scale, self, not slam.is_magical())
 	if dealt > 0:
 		dealt_damage.emit(target, dealt)
 
@@ -888,6 +939,32 @@ func _target_below(spell: SlamSpellData) -> BattleFish:
 		best = other
 	return best
 
+## Spots the fish putting something solid back under itself - the other end of
+## the hop from _tick_peak(). `_was_grounded` is updated whatever happens next,
+## so a fish that lands stunned does not fire the moment it comes round.
+func _tick_landing() -> void:
+	var landed := _grounded and not _was_grounded
+	_was_grounded = _grounded
+	if not landed or fish == null or not is_alive() or is_stunned() or _hang_left > 0.0:
+		return
+	for spell in fish.ready_spells(SpellData.Trigger.ON_LANDING):
+		var burn := spell.data as BurnZoneSpellData
+		if burn == null:
+			continue
+		var damage := spell.try_cast_at(caster_power(spell.data))
+		if damage == SpellInstance.NOT_READY:
+			continue
+		cast_spell.emit(spell.data, null)
+		_light_zone(burn, damage)
+
+## Leaves a patch of fire where the fish just came down. Parented alongside it
+## rather than under it, like every other effect, so it stays where it was lit
+## and outlives the fish that lit it.
+func _light_zone(spell: BurnZoneSpellData, damage: int) -> void:
+	var zone := SpellFireZone.light(_effect_parent(), global_position, spell, damage, self)
+	if zone != null:
+		zone.hit_fish.connect(_on_bubble_hit)
+
 ## Spends a spell that was waiting for the top of a hop. Nothing to shoot at
 ## means the charge is kept rather than spent on the scenery - unlike an ON_HIT
 ## spell, this one is aimed, so firing it at nobody would just waste it.
@@ -906,7 +983,7 @@ func _cast_at_peak() -> void:
 	var target := _nearest_enemy()
 	if target == null:
 		return
-	var damage := spell.try_cast(fish)
+	var damage := spell.try_cast_at(caster_power(spell.data))
 	if damage == SpellInstance.NOT_READY:
 		return
 	cast_spell.emit(spell.data, target)
@@ -974,8 +1051,8 @@ func _fire_bubble() -> void:
 	if bubble != null:
 		bubble.hit_fish.connect(_on_bubble_hit)
 
-## A bubble landing is this fish landing a hit, as far as anything watching is
-## concerned.
+## Something this fish left behind - a bubble in flight, a patch of fire - is
+## this fish landing a hit, as far as anything watching is concerned.
 func _on_bubble_hit(target: BattleFish, amount: int) -> void:
 	dealt_damage.emit(target, amount)
 
@@ -1027,7 +1104,8 @@ func _explode(spell: ExplosionSpellData, origin: Vector3, damage: int) -> void:
 		var distance := target.global_position.distance_to(origin)
 		if distance > spell.radius:
 			continue
-		var dealt := target.take_blast(damage, origin, spell.knockback_at(distance), self)
+		var dealt := target.take_blast(damage, origin, spell.knockback_at(distance),
+			self, not spell.is_magical())
 		if dealt > 0:
 			dealt_damage.emit(target, dealt)
 

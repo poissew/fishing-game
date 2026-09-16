@@ -78,7 +78,7 @@ func _physics_process(delta: float) -> void:
 	if target == null:
 		return
 	var dealt := target.take_blast(_damage, global_position, _spell.knockback_scale,
-		_caster if is_instance_valid(_caster) else null)
+		_caster if is_instance_valid(_caster) else null, not _spell.is_magical())
 	if dealt > 0:
 		hit_fish.emit(target, dealt)
 	queue_free()

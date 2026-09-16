@@ -36,6 +36,9 @@ enum Trigger {
 	## Goes off the moment it is off cooldown, with nothing to wait for and
 	## nothing to aim at. The cooldown is the whole of the pacing.
 	WHEN_READY,
+	## Spent the moment the fish puts something solid back under itself - the
+	## other end of the hop from AT_JUMP_PEAK.
+	ON_LANDING,
 }
 
 @export_category("Base Data")
