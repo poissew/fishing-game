@@ -237,6 +237,10 @@ var _volley_shots := 0
 var _volley_timer := 0.0
 var _hang_left := 0.0
 
+## Whether the fish had something under it last frame, so that the moment it
+## gets something under it again can be told from simply resting on the floor.
+var _was_grounded := false
+
 ## The fish's velocity from before the physics step it is now being told about.
 ## By the time body_entered fires, the solver has already bounced the fish off
 ## whatever it hit, so this is the only record of which way it was going.
@@ -524,6 +528,7 @@ func _physics_process(delta: float) -> void:
 	_tick_volley(delta)
 	_tick_flop(delta)
 	_tick_peak()
+	_tick_landing()
 	_tick_overhead()
 	_tick_ready_spells()
 	_tick_look(delta)
@@ -934,6 +939,32 @@ func _target_below(spell: SlamSpellData) -> BattleFish:
 		best = other
 	return best
 
+## Spots the fish putting something solid back under itself - the other end of
+## the hop from _tick_peak(). `_was_grounded` is updated whatever happens next,
+## so a fish that lands stunned does not fire the moment it comes round.
+func _tick_landing() -> void:
+	var landed := _grounded and not _was_grounded
+	_was_grounded = _grounded
+	if not landed or fish == null or not is_alive() or is_stunned() or _hang_left > 0.0:
+		return
+	for spell in fish.ready_spells(SpellData.Trigger.ON_LANDING):
+		var burn := spell.data as BurnZoneSpellData
+		if burn == null:
+			continue
+		var damage := spell.try_cast_at(caster_power(spell.data))
+		if damage == SpellInstance.NOT_READY:
+			continue
+		cast_spell.emit(spell.data, null)
+		_light_zone(burn, damage)
+
+## Leaves a patch of fire where the fish just came down. Parented alongside it
+## rather than under it, like every other effect, so it stays where it was lit
+## and outlives the fish that lit it.
+func _light_zone(spell: BurnZoneSpellData, damage: int) -> void:
+	var zone := SpellFireZone.light(_effect_parent(), global_position, spell, damage, self)
+	if zone != null:
+		zone.hit_fish.connect(_on_bubble_hit)
+
 ## Spends a spell that was waiting for the top of a hop. Nothing to shoot at
 ## means the charge is kept rather than spent on the scenery - unlike an ON_HIT
 ## spell, this one is aimed, so firing it at nobody would just waste it.
@@ -1020,8 +1051,8 @@ func _fire_bubble() -> void:
 	if bubble != null:
 		bubble.hit_fish.connect(_on_bubble_hit)
 
-## A bubble landing is this fish landing a hit, as far as anything watching is
-## concerned.
+## Something this fish left behind - a bubble in flight, a patch of fire - is
+## this fish landing a hit, as far as anything watching is concerned.
 func _on_bubble_hit(target: BattleFish, amount: int) -> void:
 	dealt_damage.emit(target, amount)
 
