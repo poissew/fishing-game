@@ -49,8 +49,17 @@ func caster_power(caster: FishInstance) -> int:
 ## Fires the spell and returns the damage rolled, or NOT_READY if it is still
 ## cooling down. Check is_ready() first if you need to branch before spending
 ## the cast.
+##
+## Reads the caster's stats straight off it, which is right for anything
+## simulating a fight with no bodies in it. A battler casts through
+## try_cast_at() instead: in an arena a fish's stats are what its passives say
+## they are, and the FishInstance does not know about those.
 func try_cast(caster: FishInstance) -> int:
+	return try_cast_at(caster_power(caster))
+
+## Fires the spell with a power the caller has already worked out.
+func try_cast_at(power: int) -> int:
 	if not is_ready():
 		return NOT_READY
 	cooldown_left = float(data.base_cooldown)
-	return data.compute_damage(caster_power(caster))
+	return data.compute_damage(power)

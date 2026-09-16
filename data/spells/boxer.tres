@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="BoxerSpellData" format=3]
+
+[ext_resource type="Script" path="res://classes/spells/boxer_spell_data.gd" id="1_boxr"]
+
+[resource]
+script = ExtResource("1_boxr")
+name = "Boxer"
+description = "Never had any patience for spellwork. Whatever this one had in the way of magic, it puts into hitting things instead."
+trigger = 3
+base_power = 0
+base_type = 0
+base_cooldown = 0
+conversion = 1.0
+magic_scale = 0.0

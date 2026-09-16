@@ -18,7 +18,8 @@ extends RigidBody3D
 ##
 ## Spells ride on the FishInstance and are cast from here. A spell that
 ## triggers ON_HIT goes off on the next thing this fish runs into, fish or wall
-## or floor, rolls its damage through SpellInstance.try_cast() and feeds it into
+## or floor, rolls its damage through SpellInstance.try_cast_at() - on the stats
+## this body reckons it has, passives and all, see caster_power() - and feeds it into
 ## the same take_damage() a touch uses - the only difference is that a blast
 ## comes from a point in the world rather than from another fish, and so shoves
 ## outwards from it, the caster included. A spell can also wait for the top of a
@@ -222,6 +223,8 @@ var _dot_source: BattleFish = null
 ## The fish's CowardSpellData, if it carries one: read once when the fish is
 ## bound rather than looked up every hop. Null for a fish that will fight.
 var _coward: CowardSpellData = null
+## Its BoxerSpellData, likewise: the one that moves its magic into its fists.
+var _boxer: BoxerSpellData = null
 
 ## The volley a spell left running: what there is still to fire, at what, and
 ## how long the fish hangs there before gravity gets it back.
@@ -285,6 +288,7 @@ func bind_fish(fish_instance: FishInstance) -> void:
 ## rather than per hop: a passive cannot come or go in the middle of a fight.
 func _read_passives() -> void:
 	_coward = null
+	_boxer = null
 	if fish == null:
 		return
 	for spell in fish.spells:
@@ -293,6 +297,9 @@ func _read_passives() -> void:
 		var coward := spell.data as CowardSpellData
 		if coward != null:
 			_coward = coward
+		var boxer := spell.data as BoxerSpellData
+		if boxer != null:
+			_boxer = boxer
 
 ## Reads the size, weight and icon off the fish and builds the body out of them.
 func _apply_fish() -> void:
@@ -350,21 +357,37 @@ func world_length() -> float:
 
 # -- Stats --------------------------------------------------------------------
 
-## Damage this fish deals on contact. A coward deals a share of it - none, by
-## default: it will not fight, and that is the price of the spell. The fish's
-## own phys_dmg is left alone, so what a spell scaling off it does is unchanged
-## and the selection screen still reports the catch honestly.
+## Damage this fish deals on contact, once its passives have had their say: a
+## boxer folds its magic damage in here, a coward keeps a share of the result -
+## none, by default, because it will not fight.
+##
+## The FishInstance's own phys_dmg is left alone either way, so the selection
+## screen still reports the catch honestly. This is the number the arena uses.
 func phys_dmg() -> int:
 	if fish == null:
 		return 0
+	var power := fish.phys_dmg
+	if _boxer != null:
+		power += int(round(fish.magic_dmg * _boxer.conversion))
 	if _coward != null:
-		return int(round(fish.phys_dmg * _coward.phys_scale))
-	return fish.phys_dmg
+		power = int(round(power * _coward.phys_scale))
+	return maxi(0, power)
 
-## Damage this fish's spells scale off. SpellInstance takes the FishInstance
-## itself and picks this or phys_dmg depending on the spell's type.
+## Damage this fish's spells scale off, once its passives have had their say: a
+## boxer has spent it on its fists and has none of it left.
 func magic_dmg() -> int:
-	return fish.magic_dmg if fish != null else 0
+	if fish == null:
+		return 0
+	if _boxer != null:
+		return maxi(0, int(round(fish.magic_dmg * _boxer.magic_scale)))
+	return fish.magic_dmg
+
+## The stat a spell of this type scales off, as this body reckons it. Every cast
+## goes through here rather than reading the FishInstance, so a passive that
+## rearranges what a fish's stats mean reaches its spells as well as its touches
+## - a boxer's blast is worth nothing because a boxer has no magic left.
+func caster_power(data: SpellData) -> int:
+	return magic_dmg() if data.is_magical() else phys_dmg()
 
 func is_alive() -> bool:
 	return fish != null and fish.is_alive() and not _dead
@@ -672,7 +695,7 @@ func _cast_on_hit(other: BattleFish, landed: bool) -> void:
 	for spell in fish.ready_spells(SpellData.Trigger.ON_HIT):
 		if spell.data.needs_hit and not landed:
 			continue
-		var damage := spell.try_cast(fish)
+		var damage := spell.try_cast_at(caster_power(spell.data))
 		if damage == SpellInstance.NOT_READY:
 			continue
 		cast_spell.emit(spell.data, other)
@@ -796,7 +819,7 @@ func _tick_ready_spells() -> void:
 		var camera := spell.data as PaparazziSpellData
 		if camera == null:
 			continue
-		if spell.try_cast(fish) == SpellInstance.NOT_READY:
+		if spell.try_cast_at(caster_power(spell.data)) == SpellInstance.NOT_READY:
 			continue
 		# No target: the camera goes off whether or not anybody is in the shot.
 		cast_spell.emit(spell.data, null)
@@ -860,7 +883,7 @@ func _tick_overhead() -> void:
 	var target := _target_below(slam)
 	if target == null:
 		return
-	var damage := spell.try_cast(fish)
+	var damage := spell.try_cast_at(caster_power(spell.data))
 	if damage == SpellInstance.NOT_READY:
 		return
 	cast_spell.emit(spell.data, target)
@@ -906,7 +929,7 @@ func _cast_at_peak() -> void:
 	var target := _nearest_enemy()
 	if target == null:
 		return
-	var damage := spell.try_cast(fish)
+	var damage := spell.try_cast_at(caster_power(spell.data))
 	if damage == SpellInstance.NOT_READY:
 		return
 	cast_spell.emit(spell.data, target)
