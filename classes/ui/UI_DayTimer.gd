@@ -11,14 +11,18 @@ class_name UIDayTimer
 
 const FONT_PATH := "res://ui/fonts/monogram.ttf"
 
-@export var font_size: int = 16
+## monogram is drawn on a 16px grid, so keep this a whole multiple of 16 -
+## anything in between lands glyphs on half pixels and the digits come out
+## unevenly wide.
+@export var font_size: int = 32
 ## Gap between the top of the screen and the top of the digits.
 @export var margin_top: float = 6.0
 @export var color: Color = Color(0.96, 0.96, 0.92, 1.0)
 ## The timer sits over open sky rather than on a panel, so it carries its own
 ## outline instead of relying on a background for contrast.
 @export var outline_color: Color = Color(0.05, 0.06, 0.09, 0.85)
-@export var outline_size: int = 1
+## Scaled with the text so the outline keeps the same visual weight.
+@export var outline_size: int = 2
 
 var _font: Font = null
 ## The string currently on screen, kept so _process can tell when it is stale.
