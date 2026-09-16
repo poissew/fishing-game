@@ -44,6 +44,16 @@ const C_ROW_HOVER    := Color(0.16, 0.46, 0.18, 0.92)
 const C_TEXT         := Color(0.62, 0.80, 0.56, 1.00)
 const C_TEXT_DIM     := Color(0.40, 0.55, 0.36, 1.00)
 const C_MONEY        := Color(0.92, 0.82, 0.32, 1.00)
+## The HUD counter sits over the world rather than on a panel, so - like
+## UIDayTimer - it carries its own outline for contrast.
+const C_MONEY_OUTLINE := Color(0.05, 0.06, 0.09, 0.85)
+## Twice the panel text, so the counter reads at a glance. monogram is drawn on
+## a 16px grid, so keep this a whole multiple of UIFont.SIZE.
+const MONEY_SIZE     := UIFont.SIZE * 2
+## Top-left corner of the digits.
+const MONEY_POS      := Vector2(6.0, 4.0)
+## Scaled with the text, same as UIDayTimer, so the outline keeps its weight.
+const MONEY_OUTLINE  := 2
 # Sell-all button
 const C_BTN          := Color(0.16, 0.46, 0.18, 0.92)
 const C_BTN_HOVER    := Color(0.22, 0.60, 0.24, 0.92)
@@ -137,8 +147,15 @@ func _draw() -> void:
 		_draw_prompt()
 
 func _draw_money() -> void:
-	draw_string(UIFont.FONT, Vector2(6, 12), "$ %d" % _wallet.money,
-		HORIZONTAL_ALIGNMENT_LEFT, -1, UIFont.SIZE, C_MONEY)
+	var font := UIFont.FONT
+	var text := "$ %d" % _wallet.money
+	# draw_string takes a baseline, not a top-left corner, hence the ascent -
+	# floored, because get_ascent() can land on a fraction and half-pixel glyphs
+	# are glaring at 480x270.
+	var pos := (MONEY_POS + Vector2(0.0, font.get_ascent(MONEY_SIZE))).floor()
+	draw_string_outline(font, pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1,
+		MONEY_SIZE, MONEY_OUTLINE, C_MONEY_OUTLINE)
+	draw_string(font, pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, MONEY_SIZE, C_MONEY)
 
 func _draw_prompt() -> void:
 	var font := UIFont.FONT
