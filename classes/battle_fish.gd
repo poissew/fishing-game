@@ -26,7 +26,8 @@ extends RigidBody3D
 ## never fire at all and simply change how the fish behaves: a PASSIVE, read off
 ## the fish once in bind_fish() rather than cast. A spell can also leave damage
 ## behind it rather than dealing any - see apply_dot(), which is state on the
-## fish that was hit and not on the fish that hit it.
+## fish that was hit and not on the fish that hit it - or wait on a condition
+## rather than a moment, like a fish being underneath this one: _tick_overhead().
 ##
 ## The collider is a capsule lying down the length of the fish, sized off the
 ## icon's own aspect, so the hitbox is the shape of the thing on screen.
@@ -359,6 +360,20 @@ func take_damage(amount: int, from: BattleFish = null) -> int:
 	var origin := from.global_position if from != null and is_instance_valid(from) else NO_ORIGIN
 	return _apply_damage(amount, from, origin, 1.0)
 
+## Drives this fish into the floor and takes health off it. The shove is
+## straight down rather than away from anything, and the damage itself carries
+## NO_ORIGIN so that nothing pushes it sideways as well - the whole point is
+## that it goes down.
+##
+## A fish already on the floor simply takes the damage: the impulse has nowhere
+## to put it.
+func slam_down(amount: int, slam_scale: float, from: BattleFish = null) -> int:
+	if not is_alive():
+		return 0
+	var dealt := _apply_damage(amount, from, NO_ORIGIN, 0.0)
+	_shove(Vector3.DOWN, amount, slam_scale, 0.0)
+	return dealt
+
 ## Damage that comes from nowhere the fish can be pushed away from - a tick of
 ## something it is already under. `from` is still credited with it, so a health
 ## bar and a battle log can name whoever started it, but the fish is not shoved:
@@ -407,11 +422,15 @@ func _knock_back(amount: int, origin: Vector3, scale: float) -> void:
 	_shove(away, amount, scale)
 
 ## The impulse itself, along a direction already settled on. `amount` is the
-## damage the shove is worth, `scale` how much harder than a touch it throws.
-func _shove(direction: Vector3, amount: int, scale: float) -> void:
+## damage the shove is worth, `scale` how much harder than a touch it throws,
+## and `lift` how much of it is aimed upwards - the default skips a fish back
+## off the floor, and 0 is for a shove that is meant to go where it is pointed,
+## like a slam into the ground.
+func _shove(direction: Vector3, amount: int, scale: float,
+		lift := KNOCKBACK_LIFT) -> void:
 	if scale <= 0.0 or direction.is_zero_approx():
 		return
-	var lifted := (direction + Vector3.UP * KNOCKBACK_LIFT).normalized()
+	var lifted := (direction + Vector3.UP * lift).normalized()
 	var impulse := lifted * float(amount) * KNOCKBACK_PER_DAMAGE * scale
 	# The cap scales too: a blast that throws twice as hard as a touch would
 	# otherwise hand the difference straight back at the ceiling.
@@ -438,6 +457,7 @@ func _physics_process(delta: float) -> void:
 	_tick_volley(delta)
 	_tick_flop(delta)
 	_tick_peak()
+	_tick_overhead()
 	_tick_look(delta)
 	# Last thing in the frame, so it is the velocity going into the step the
 	# next contact will come out of, and so _tick_peak() above still had the
@@ -713,6 +733,51 @@ func _tick_peak() -> void:
 	if _approach_velocity.y <= PEAK_RISE or linear_velocity.y > 0.0:
 		return
 	_cast_at_peak()
+
+## Fires a spell that waits for this fish to be standing over somebody. Unlike
+## the peak, which is a moment and gone, this is a condition: it is true for as
+## long as the other fish is under this one, so the spell's own cooldown is the
+## only thing pacing it.
+func _tick_overhead() -> void:
+	if fish == null or not is_alive() or _hang_left > 0.0:
+		return
+	var ready := fish.ready_spells(SpellData.Trigger.WHEN_OVER_TARGET)
+	if ready.is_empty():
+		return
+	var spell := ready[0]
+	var slam := spell.data as SlamSpellData
+	if slam == null:
+		return
+	var target := _target_below(slam)
+	if target == null:
+		return
+	var damage := spell.try_cast(fish)
+	if damage == SpellInstance.NOT_READY:
+		return
+	cast_spell.emit(spell.data, target)
+	var dealt := target.slam_down(damage, slam.slam_scale, self)
+	if dealt > 0:
+		dealt_damage.emit(target, dealt)
+
+## The nearest fish this one may hit that is underneath it: within `reach` to
+## either side and at least `min_drop` below. Null when it is standing over
+## nobody, which is most of the time.
+func _target_below(spell: SlamSpellData) -> BattleFish:
+	var best: BattleFish = null
+	var best_distance := INF
+	for node in get_tree().get_nodes_in_group(GROUP):
+		var other := node as BattleFish
+		if other == null or not can_hit(other):
+			continue
+		var offset := global_position - other.global_position
+		if offset.y < spell.min_drop:
+			continue
+		var flat := Vector2(offset.x, offset.z).length()
+		if flat > spell.reach or flat >= best_distance:
+			continue
+		best_distance = flat
+		best = other
+	return best
 
 ## Spends a spell that was waiting for the top of a hop. Nothing to shoot at
 ## means the charge is kept rather than spent on the scenery - unlike an ON_HIT

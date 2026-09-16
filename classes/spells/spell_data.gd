@@ -23,6 +23,10 @@ enum Trigger {
 	## behaves for as long as it is carried, so cooldown and damage mean
 	## nothing to it.
 	PASSIVE,
+	## Held until there is a fish underneath the caster. A condition rather
+	## than a moment: BattleFish looks for one every frame and hands the cast
+	## over whenever it finds one, so the cooldown is all that paces it.
+	WHEN_OVER_TARGET,
 }
 
 @export_category("Base Data")

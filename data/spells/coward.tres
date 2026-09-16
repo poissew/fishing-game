@@ -4,7 +4,7 @@
 
 [resource]
 script = ExtResource("1_cowd")
-name = "Coward"
+name = "Cowardice"
 description = "This one has seen enough. It hops away from whatever it is up against instead of at it, the closer that thing gets the harder it runs, and it will not throw a punch even when it is caught."
 trigger = 3
 base_power = 0
