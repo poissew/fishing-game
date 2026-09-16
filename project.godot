@@ -42,6 +42,12 @@ atlantic="atlantic water wallah"
 mud="tf you mean mud"
 lava="laval xd"
 
+[gui]
+
+; Every Control in the game draws its text with monogram. Scripts that roll
+; their own draw_string() pull the same file through UIFont instead.
+theme/custom_font="res://ui/fonts/monogram.ttf"
+
 [input]
 
 forward={
