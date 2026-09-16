@@ -13,7 +13,8 @@ extends RigidBody3D
 ## Combat is contact based. Touching another BattleFish deals this fish's
 ## phys_dmg to it, and because both bodies see the touch, both take a hit. The
 ## per-target cooldown is what stops two fish resting against each other from
-## draining one another every frame.
+## draining one another every frame, and every hit shoves the fish that took it
+## away from whatever landed it, by however much it hurt.
 ##
 ## Spells are not implemented yet. magic_dmg is read off the fish and exposed
 ## here so that when they land they can roll their damage and feed it into the
@@ -64,6 +65,15 @@ const FLOP_SIDE := 3.2
 ## Angular kick, on Z because that is the only axis left free.
 const FLOP_SPIN := 7.0
 
+## Range over which chase_bias fades. Within CHASE_NEAR a fish has its opponent
+## right there and commits to it; out past CHASE_FAR it keeps only
+## CHASE_FAR_SCALE of its bias and throws itself around much more at random. A
+## fish across the arena has no idea where it is going - it is a fish on dry
+## land - and watching two of them blunder towards each other is the point.
+const CHASE_NEAR := 1.5
+const CHASE_FAR := 5.0
+const CHASE_FAR_SCALE := 0.4
+
 ## Mass is the catch's weight in kilos, clamped so a sardine still has enough of
 ## it to shove with and a shark does not sit there like scenery.
 const MASS_MIN := 0.25
@@ -74,6 +84,21 @@ const MASS_MAX := 6.00
 ## Seconds before the same opponent can be hit again. Bouncing fish re-touch
 ## constantly; without this a fight would be over in a frame.
 const HIT_COOLDOWN := 0.45
+
+## Shove a hit is worth, in impulse per point of damage. Deliberately not
+## scaled by mass: the same hit shoves a sardine well back and barely rocks a
+## shark, which is what makes weight worth having.
+##
+## Kept well under FLOP_SIDE on purpose. A hit should knock a fish about, not
+## out-throw its own flopping - at 0.35 a single 4-damage hit put 5.6 units/s
+## into a goldfish, which cleared the arena wall.
+const KNOCKBACK_PER_DAMAGE := 0.12
+## Share of the shove aimed upwards, so a fish skips back rather than grinding
+## along the floor.
+const KNOCKBACK_LIFT := 0.25
+## Ceiling on the speed one hit can add, in units per second, so that a shark
+## hitting a sardine for 25 shoves it hard without firing it out of the arena.
+const KNOCKBACK_MAX_SPEED := 2.5
 
 ## Fired after this fish lands a touch. `amount` is what the target actually
 ## lost, so an overkill hit reports the health it really took off.
@@ -108,7 +133,9 @@ var fish: FishInstance = null
 ## Something to flop towards - the opponent, usually. Leave it null and the
 ## fish flops off in whatever direction it feels like.
 @export var chase_target: Node3D = null
-## How much of a flop aims at chase_target. 0 is pure wandering, 1 a beeline.
+## How much of a flop aims at chase_target, once the two are close. 0 is pure
+## wandering, 1 a beeline. Full strength only within CHASE_NEAR - see
+## _chase_strength().
 @export_range(0.0, 1.0, 0.05) var chase_bias: float = 0.75
 
 @onready var _sprite: Sprite3D = $Sprite3D
@@ -212,8 +239,29 @@ func take_damage(amount: int, from: BattleFish = null) -> int:
 	var dealt := fish.take_damage(amount)
 	if dealt > 0:
 		_flash_left = HIT_FLASH
+		# Knocked back by the size of the hit, not by the health it managed to
+		# take off: a killing blow shoves just as hard when the fish had one
+		# point left as when it had all of them.
+		_knock_back(amount, from)
 		took_damage.emit(dealt, from)
 	return dealt
+
+## Shoves this fish away from whatever hit it, harder the more the hit was
+## worth. Damage that came from nowhere in particular - a spell with no caster
+## given - leaves it where it stands rather than picking a direction on its own.
+##
+## A killing blow still lands one: the fish is already dead by the time this
+## runs, and being knocked over by the hit that did it is exactly right.
+func _knock_back(amount: int, from: BattleFish) -> void:
+	if from == null or not is_instance_valid(from):
+		return
+	var away := global_position - from.global_position
+	away.y = 0.0
+	# Dead centre on top of each other: any direction will do.
+	away = away.normalized() if away.length_squared() > 0.0001 else _random_horizontal()
+	var direction := (away + Vector3.UP * KNOCKBACK_LIFT).normalized()
+	var impulse := direction * float(amount) * KNOCKBACK_PER_DAMAGE
+	apply_central_impulse(impulse.limit_length(mass * KNOCKBACK_MAX_SPEED))
 
 ## Whether this fish is allowed to hurt `other`: not itself, not a team mate,
 ## and both of them still fighting.
@@ -265,20 +313,30 @@ func _flop() -> void:
 	apply_torque_impulse(Vector3.BACK * randomizer.RNG.randf_range(-FLOP_SPIN, FLOP_SPIN) * mass)
 	_wiggle_amount = 1.0
 
-## A random direction along the floor, pulled towards chase_target by chase_bias.
+## A random direction along the floor, pulled towards chase_target by however
+## much of chase_bias the distance leaves in play.
 func _flop_direction() -> Vector3:
-	var wander := Vector3(randomizer.RNG.randf_range(-1.0, 1.0), 0.0,
-		randomizer.RNG.randf_range(-1.0, 1.0))
-	if wander.length_squared() < 0.0001:
-		wander = Vector3.RIGHT
-	wander = wander.normalized()
+	var wander := _random_horizontal()
 	if chase_target == null or not is_instance_valid(chase_target) or chase_bias <= 0.0:
 		return wander
 	var towards := chase_target.global_position - global_position
 	towards.y = 0.0
-	if towards.length_squared() < 0.0001:
+	var distance := towards.length()
+	if distance < 0.0001:
 		return wander
-	return wander.lerp(towards.normalized(), chase_bias).normalized()
+	var bias := chase_bias * _chase_strength(distance)
+	return wander.lerp(towards / distance, bias).normalized()
+
+## How much of chase_bias survives at `distance`: all of it up close, falling
+## off to CHASE_FAR_SCALE of it once the other fish is right across the floor.
+func _chase_strength(distance: float) -> float:
+	var closeness := clampf(inverse_lerp(CHASE_FAR, CHASE_NEAR, distance), 0.0, 1.0)
+	return lerpf(CHASE_FAR_SCALE, 1.0, closeness)
+
+## A unit direction along the floor, any way at all.
+func _random_horizontal() -> Vector3:
+	var angle := randomizer.RNG.randf_range(-PI, PI)
+	return Vector3(cos(angle), 0.0, sin(angle))
 
 func _roll_flop_delay() -> float:
 	return randomizer.RNG.randf_range(FLOP_INTERVAL.x, FLOP_INTERVAL.y)
