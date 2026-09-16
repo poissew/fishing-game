@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="ExplosionSpellData" format=3]
+
+[ext_resource type="Script" path="res://classes/spells/explosion_spell_data.gd" id="1_expl"]
+[ext_resource type="SpriteFrames" uid="uid://cmvxh4wegm7xa" path="res://sprites/spells/explosion.tres" id="2_expl"]
+
+[resource]
+script = ExtResource("1_expl")
+name = "Detonate"
+description = "Primed. The next thing this one runs into goes up with it, and everything close enough - itself included - is thrown clear."
+trigger = 1
+base_power = 0
+base_type = 1
+base_cooldown = 6
+damage_scale = 1.5
+radius = 1.6
+knockback_scale = 3.0
+self_knockback = 0.7
+frames = ExtResource("2_expl")
+visual_scale = 1.0

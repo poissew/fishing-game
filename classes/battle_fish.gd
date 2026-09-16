@@ -16,9 +16,12 @@ extends RigidBody3D
 ## draining one another every frame, and every hit shoves the fish that took it
 ## away from whatever landed it, by however much it hurt.
 ##
-## Spells are not implemented yet. magic_dmg is read off the fish and exposed
-## here so that when they land they can roll their damage and feed it into the
-## same take_damage() a touch uses - nothing else needs to change.
+## Spells ride on the FishInstance and are cast from here. A spell that
+## triggers ON_HIT goes off on the next thing this fish runs into, fish or wall
+## or floor, rolls its damage through SpellInstance.try_cast() and feeds it into
+## the same take_damage() a touch uses - the only difference is that a blast
+## comes from a point in the world rather than from another fish, and so shoves
+## outwards from it, the caster included.
 ##
 ## The collider is a capsule lying down the length of the fish, sized off the
 ## icon's own aspect, so the hitbox is the shape of the thing on screen.
@@ -33,6 +36,12 @@ extends RigidBody3D
 
 const SCENE_PATH := "res://objects/BattleFish.tscn"
 const DEFAULT_ICON: Texture2D = preload("res://icon.svg")
+
+## Every battler in the tree joins this. A blast walks the group rather than
+## asking the physics server what is inside a sphere: contact callbacks run
+## mid-step, where a shape query is not welcome, and an arena holds a handful
+## of fish rather than a crowd.
+const GROUP := &"battlers"
 
 # -- Look ---------------------------------------------------------------------
 
@@ -116,7 +125,13 @@ const KNOCKBACK_PER_DAMAGE := 0.12
 const KNOCKBACK_LIFT := 0.25
 ## Ceiling on the speed one hit can add, in units per second, so that a shark
 ## hitting a sardine for 25 shoves it hard without firing it out of the arena.
+## Scaled along with the shove itself, so a spell that throws harder than a
+## touch is not handed back the difference by the cap.
 const KNOCKBACK_MAX_SPEED := 2.5
+
+## Stands in for "this damage came from nowhere in particular". Damage carrying
+## it leaves the fish where it stands instead of picking a direction on its own.
+const NO_ORIGIN := Vector3.INF
 
 ## Fired after this fish lands a touch. `amount` is what the target actually
 ## lost, so an overkill hit reports the health it really took off.
@@ -124,6 +139,9 @@ signal dealt_damage(target: BattleFish, amount: int)
 ## Fired when this fish loses health. `from` is the fish that did it, or null
 ## for damage that came from somewhere else.
 signal took_damage(amount: int, from: BattleFish)
+## Fired when this fish spends a spell, before the spell's damage lands.
+## `target` is the fish whose touch set an ON_HIT spell off, null otherwise.
+signal cast_spell(spell: SpellData, target: BattleFish)
 ## Fired the moment the bound fish runs out of health. The body is left in the
 ## arena, belly up - whoever spawned it decides when it leaves.
 ##
@@ -165,6 +183,11 @@ var _grounded := false
 ## Cooldown left per opponent, keyed by instance id.
 var _hit_cooldowns := {}
 
+## The fish's velocity from before the physics step it is now being told about.
+## By the time body_entered fires, the solver has already bounced the fish off
+## whatever it hit, so this is the only record of which way it was going.
+var _approach_velocity := Vector3.ZERO
+
 var _wiggle_phase := 0.0
 var _wiggle_amount := 0.0
 var _flash_left := 0.0
@@ -183,13 +206,15 @@ static func spawn(fish_instance: FishInstance) -> BattleFish:
 	return battler
 
 func _ready() -> void:
+	add_to_group(GROUP)
 	_flop_timer = _roll_flop_delay()
 	body_entered.connect(_on_body_entered)
 	_apply_fish()
 
-## Puts `fish_instance` in this body. The fish enters the arena at full health,
-## the way gamephase sends a champion in; set current_health afterwards if a
-## fight is being resumed rather than started.
+## Puts `fish_instance` in this body. The fish enters the arena at full health
+## and with every spell off cooldown, the way gamephase sends a champion in;
+## set current_health afterwards if a fight is being resumed rather than
+## started.
 func bind_fish(fish_instance: FishInstance) -> void:
 	if fish != null and fish.died.is_connected(_on_fish_died):
 		fish.died.disconnect(_on_fish_died)
@@ -197,6 +222,7 @@ func bind_fish(fish_instance: FishInstance) -> void:
 	_dead = false
 	if fish != null:
 		fish.reset_health()
+		fish.reset_spells()
 		fish.died.connect(_on_fish_died)
 	# bind_fish() is usually called before the body is in the tree, so the
 	# @onready nodes are not there yet - _ready() picks the work back up.
@@ -257,8 +283,8 @@ func world_length() -> float:
 func phys_dmg() -> int:
 	return fish.phys_dmg if fish != null else 0
 
-## Damage this fish's spells scale off. Nothing casts yet; SpellInstance takes
-## the FishInstance itself and picks this or phys_dmg depending on the type.
+## Damage this fish's spells scale off. SpellInstance takes the FishInstance
+## itself and picks this or phys_dmg depending on the spell's type.
 func magic_dmg() -> int:
 	return fish.magic_dmg if fish != null else 0
 
@@ -269,9 +295,25 @@ func is_alive() -> bool:
 func health_ratio() -> float:
 	return fish.health_ratio() if fish != null else 0.0
 
-## Takes `amount` off the bound fish and returns what it actually lost. Every
-## source of damage goes through here - a touch today, a spell once they exist.
+## Takes `amount` off the bound fish and returns what it actually lost. This is
+## the way every touch gets applied; the shove is away from the fish that landed
+## it.
 func take_damage(amount: int, from: BattleFish = null) -> int:
+	var origin := from.global_position if from != null and is_instance_valid(from) else NO_ORIGIN
+	return _apply_damage(amount, from, origin, 1.0)
+
+## Damage from a point in the world rather than from a fish - a spell's blast.
+## The shove is outwards from `origin`, so everything caught is thrown away from
+## the explosion instead of away from whoever set it off, and `knockback_scale`
+## is how much harder than a touch of the same size it throws.
+func take_blast(amount: int, origin: Vector3, knockback_scale: float = 1.0,
+		from: BattleFish = null) -> int:
+	return _apply_damage(amount, from, origin, knockback_scale)
+
+## The one place health actually comes off. `origin` is what the fish is shoved
+## away from, NO_ORIGIN for damage that should not move it at all.
+func _apply_damage(amount: int, from: BattleFish, origin: Vector3,
+		knockback_scale: float) -> int:
 	if not is_alive():
 		return 0
 	var dealt := fish.take_damage(amount)
@@ -280,26 +322,36 @@ func take_damage(amount: int, from: BattleFish = null) -> int:
 		# Knocked back by the size of the hit, not by the health it managed to
 		# take off: a killing blow shoves just as hard when the fish had one
 		# point left as when it had all of them.
-		_knock_back(amount, from)
+		_knock_back(amount, origin, knockback_scale)
 		took_damage.emit(dealt, from)
 	return dealt
 
-## Shoves this fish away from whatever hit it, harder the more the hit was
-## worth. Damage that came from nowhere in particular - a spell with no caster
-## given - leaves it where it stands rather than picking a direction on its own.
+## Shoves this fish away from `origin`, harder the more the hit was worth.
+## Damage that came from nowhere in particular - NO_ORIGIN, a spell with no
+## caster given - leaves it where it stands rather than picking a direction on
+## its own.
 ##
 ## A killing blow still lands one: the fish is already dead by the time this
 ## runs, and being knocked over by the hit that did it is exactly right.
-func _knock_back(amount: int, from: BattleFish) -> void:
-	if from == null or not is_instance_valid(from):
+func _knock_back(amount: int, origin: Vector3, scale: float) -> void:
+	if origin == NO_ORIGIN:
 		return
-	var away := global_position - from.global_position
+	var away := global_position - origin
 	away.y = 0.0
 	# Dead centre on top of each other: any direction will do.
 	away = away.normalized() if away.length_squared() > 0.0001 else _random_horizontal()
-	var direction := (away + Vector3.UP * KNOCKBACK_LIFT).normalized()
-	var impulse := direction * float(amount) * KNOCKBACK_PER_DAMAGE
-	apply_central_impulse(impulse.limit_length(mass * KNOCKBACK_MAX_SPEED))
+	_shove(away, amount, scale)
+
+## The impulse itself, along a direction already settled on. `amount` is the
+## damage the shove is worth, `scale` how much harder than a touch it throws.
+func _shove(direction: Vector3, amount: int, scale: float) -> void:
+	if scale <= 0.0 or direction.is_zero_approx():
+		return
+	var lifted := (direction + Vector3.UP * KNOCKBACK_LIFT).normalized()
+	var impulse := lifted * float(amount) * KNOCKBACK_PER_DAMAGE * scale
+	# The cap scales too: a blast that throws twice as hard as a touch would
+	# otherwise hand the difference straight back at the ceiling.
+	apply_central_impulse(impulse.limit_length(mass * KNOCKBACK_MAX_SPEED * scale))
 
 ## Whether this fish is allowed to hurt `other`: not itself, not a team mate,
 ## and both of them still fighting.
@@ -316,8 +368,13 @@ func can_hit(other: BattleFish) -> bool:
 
 func _physics_process(delta: float) -> void:
 	_tick_hit_cooldowns(delta)
+	if fish != null and is_alive():
+		fish.tick_spells(delta)
 	_tick_flop(delta)
 	_tick_look(delta)
+	# Last thing in the frame, so it is the velocity going into the step the
+	# next contact will come out of. See _approach_velocity.
+	_approach_velocity = linear_velocity
 
 func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 	# Cheapest honest answer to "is it standing on something". Flopping off
@@ -434,13 +491,18 @@ func _sprite_roll() -> float:
 # -- Contact ------------------------------------------------------------------
 
 func _on_body_entered(body: Node) -> void:
+	# `other` is null for scenery - a wall, or the floor at the end of a flop.
+	# There is nothing to trade damage with then, but a spell that goes off on
+	# contact does not care what it was that got touched.
 	var other := body as BattleFish
-	if other == null:
-		return
-	_hit(other)
+	if other != null:
+		_hit(other)
+	_cast_on_hit(other)
 
 ## Lands a touch on `other`. Both bodies run this on their own side of the
-## collision, so a head-on flop trades damage both ways.
+## collision, so a head-on flop trades damage both ways. A touch that is not
+## allowed to hurt anything - a team mate, a fish already dead - still counts as
+## a contact for a spell: that is decided in _on_body_entered(), not here.
 func _hit(other: BattleFish) -> void:
 	if not can_hit(other):
 		return
@@ -451,6 +513,82 @@ func _hit(other: BattleFish) -> void:
 	var dealt := other.take_damage(phys_dmg(), self)
 	if dealt > 0:
 		dealt_damage.emit(other, dealt)
+
+# -- Spells -------------------------------------------------------------------
+
+## Spends an armed ON_HIT spell on the contact just made, if this fish has one
+## off cooldown. `other` is the fish that was touched, or null for a wall or the
+## floor - anything the fish runs into sets the spell off. One spell per contact,
+## and the cooldown on the SpellInstance is the only gate, which is what keeps a
+## fish from going up every time it lands.
+func _cast_on_hit(other: BattleFish) -> void:
+	if fish == null or not is_alive():
+		return
+	var spell := fish.ready_on_hit_spell()
+	if spell == null:
+		return
+	var damage := spell.try_cast(fish)
+	if damage == SpellInstance.NOT_READY:
+		return
+	cast_spell.emit(spell.data, other)
+	# An explosion is the only ON_HIT spell there is so far. Another one would
+	# branch here on its own data type rather than dress itself up as a blast.
+	var blast := spell.data as ExplosionSpellData
+	if blast != null:
+		_explode(blast, _contact_point(other), damage)
+
+## Throws the fish that set the blast off back the way it came. It takes none of
+## the blast's damage - can_hit() rules itself out - but an explosion under its
+## own nose that left it standing there would read as somebody else's.
+func _recoil(spell: ExplosionSpellData, origin: Vector3, damage: int) -> void:
+	_shove(_recoil_direction(origin), damage,
+		spell.knockback_at(0.0) * spell.self_knockback)
+
+## Back the way the fish was travelling when it hit, which is the one direction
+## that works for a wall as well as for another fish. Straight out of the blast
+## if it was barely moving, and anywhere at all if it is sitting on top of it.
+func _recoil_direction(origin: Vector3) -> Vector3:
+	var approach := _approach_velocity
+	approach.y = 0.0
+	if approach.length_squared() > 0.01:
+		return -approach.normalized()
+	var away := global_position - origin
+	away.y = 0.0
+	return away.normalized() if away.length_squared() > 0.0001 else _random_horizontal()
+
+## Blows up at `origin`: every fish this one is allowed to hit and that stands
+## inside the spell's radius takes the full damage, thrown outwards by however
+## close to the middle of it it was. The caster is not hurt by its own blast -
+## can_hit() rules out itself and its team - only thrown by it.
+func _explode(spell: ExplosionSpellData, origin: Vector3, damage: int) -> void:
+	SpellExplosion.burst(_effect_parent(), origin, spell)
+	_recoil(spell, origin, damage)
+	for node in get_tree().get_nodes_in_group(GROUP):
+		var target := node as BattleFish
+		if target == null or not can_hit(target):
+			continue
+		var distance := target.global_position.distance_to(origin)
+		if distance > spell.radius:
+			continue
+		var dealt := target.take_blast(damage, origin, spell.knockback_at(distance), self)
+		if dealt > 0:
+			dealt_damage.emit(target, dealt)
+
+## Near enough to where a contact happened: halfway between the two fish, or the
+## fish itself when it ran into scenery. The solver knows the real contact point
+## but body_entered is not handed it, and half a fish either way is nothing next
+## to a blast three units across.
+func _contact_point(other: BattleFish) -> Vector3:
+	if other == null or not is_instance_valid(other):
+		return global_position
+	return (global_position + other.global_position) * 0.5
+
+## Where effects that happen in the world are parented - alongside this fish
+## rather than under it, so a blast stays where it went off and outlives the
+## fish that set it off.
+func _effect_parent() -> Node3D:
+	var parent := get_parent() as Node3D
+	return parent if parent != null else self
 
 # -- Death --------------------------------------------------------------------
 

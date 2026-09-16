@@ -8,9 +8,20 @@ extends Resource
 ## values flatten the gap between a weak and a strong caster.
 const POWER_SCALE := 10.0
 
+## What makes a spell go off.
+enum Trigger {
+	## Fired by whatever is driving the fight, whenever it decides to.
+	MANUAL,
+	## Armed the moment it comes off cooldown, and spent on the caster's next
+	## landed touch - the fish does not aim it, it just goes off on contact.
+	ON_HIT,
+}
+
 @export_category("Base Data")
 @export var name: String
 @export_multiline var description: String
+## When the battler should cast this. See Trigger.
+@export var trigger: Trigger = Trigger.MANUAL
 
 @export_category("Combat")
 ## Base damage before the caster's phys_dmg / magic_dmg is applied.
@@ -19,6 +30,9 @@ const POWER_SCALE := 10.0
 @export var base_type: SpellType.Type = SpellType.Type.PHYSICAL
 ## Seconds to wait between two casts. 0 means it can be recast immediately.
 @export_range(0, 60, 1, "or_greater", "suffix:s") var base_cooldown: int = 0
+
+func is_on_hit() -> bool:
+	return trigger == Trigger.ON_HIT
 
 func is_magical() -> bool:
 	return SpellType.is_magical(base_type)

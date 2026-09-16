@@ -1,6 +1,13 @@
 class_name FishData
 extends Item
 
+## Every spell a fish can turn up with. A stand-in for a spell registry: once
+## there are more of them than fit in a const, this becomes a Spellsdb autoload
+## keyed by id, the way Itemdb does it for items.
+const SPELL_POOL := [
+	preload("res://data/spells/explosion.tres"),
+]
+
 enum Rarity {
 	COMMON,
 	UNCOMMON,
@@ -27,7 +34,7 @@ enum Rarity {
 ## HEALTH — scales with the fish's real size (min_size..max_size), not its inventory size.
 @export var health_base: int = 10
 @export var health_per_size: float = 8.0
-## SPELLS — how many spells a fish can roll. The spell datatype is not implemented yet.
+## SPELLS — how many spells a fish can roll, out of SPELL_POOL.
 @export var max_spells: int = 3
 
 @export_category("Advanced Shit")
@@ -52,10 +59,14 @@ func roll_magic_dmg() -> int:
 func roll_health(real_size: float) -> int:
 	return maxi(1, int(round(health_base + real_size * health_per_size)))
 
-## Spells are purely random. The spell datatype is not implemented yet, so this
-## only reserves the rolled number of slots.
-## TODO: fill with actual Spell resources once the datatype exists.
-func roll_spells() -> Array:
-	var spells := []
-	spells.resize(randomizer.RNG.randi_range(0, max_spells))
+## Spells are purely random: a fish rolls anywhere from none to max_spells of
+## them, drawn without replacement so it never carries the same spell twice.
+## A pool smaller than max_spells caps the count on its own.
+func roll_spells() -> Array[SpellInstance]:
+	var pool := SPELL_POOL.duplicate()
+	var spells: Array[SpellInstance] = []
+	var count := mini(randomizer.RNG.randi_range(0, max_spells), pool.size())
+	for _i in count:
+		var pick: SpellData = pool.pop_at(randomizer.RNG.randi_range(0, pool.size() - 1))
+		spells.append(SpellInstance.create_spell_instance(pick))
 	return spells

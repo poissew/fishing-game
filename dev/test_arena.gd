@@ -10,6 +10,7 @@ extends Node3D
 ##
 ##   R / Enter - fresh pair of fighters
 ##   1 / 2     - rematch the same two, healed up
+##   E         - rematch with both of them given every spell there is
 ##   Escape    - hand the mouse back, then quit
 ##
 ## The camera keys are listed in free_camera.gd, which does the flying; the
@@ -24,6 +25,10 @@ const SPECIES := [
 	preload("res://data/items/fish/catfish.tres"),
 	preload("res://data/items/fish/shark.tres"),
 ]
+
+## Handed to both fighters by the E key, so a spell can be watched without
+## waiting for one to roll on a fish.
+const TEST_SPELLS := FishData.SPELL_POOL
 
 ## One colour per side, so the two fighters are told apart at a glance even in
 ## a rematch. The fish keep their own icon; this only tints it.
@@ -74,6 +79,19 @@ func rematch() -> void:
 	_spawn_pair([battlers[0].fish, battlers[1].fish])
 	_hud.log_line("rematch")
 
+## Rematch with both fish carrying every spell in the game, whatever they
+## actually rolled. The only way to see a spell go off on demand.
+func armed_rematch() -> void:
+	if battlers.size() < 2:
+		start_round()
+	for battler in battlers:
+		var spells: Array[SpellInstance] = []
+		for spell_data in TEST_SPELLS:
+			spells.append(SpellInstance.create_spell_instance(spell_data))
+		battler.fish.spells = spells
+	_spawn_pair([battlers[0].fish, battlers[1].fish])
+	_hud.log_line("rematch, both armed")
+
 func _spawn_pair(fish: Array) -> void:
 	for child in _fighters.get_children():
 		child.queue_free()
@@ -87,6 +105,7 @@ func _spawn_pair(fish: Array) -> void:
 		battler.tint = TEAM_TINTS[i]
 		battler.position = Vector3(SPAWN_X if i == 1 else -SPAWN_X, SPAWN_Y, 0.0)
 		battler.dealt_damage.connect(_on_dealt_damage.bind(battler))
+		battler.cast_spell.connect(_on_cast_spell.bind(battler))
 		battler.died.connect(_on_battler_died)
 		_fighters.add_child(battler)
 		battlers.append(battler)
@@ -107,6 +126,9 @@ func _pick_species() -> Array:
 func _on_dealt_damage(target: BattleFish, amount: int, attacker: BattleFish) -> void:
 	_hud.log_line("%s hits %s for %d" % [
 		attacker.fish.data.name, target.fish.data.name, amount])
+
+func _on_cast_spell(spell: SpellData, _target: BattleFish, caster: BattleFish) -> void:
+	_hud.log_line("%s casts %s" % [caster.fish.data.name, spell.name])
 
 func _on_battler_died(battler: BattleFish) -> void:
 	for other in battlers:
@@ -137,6 +159,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			start_round()
 		KEY_1, KEY_2:
 			rematch()
+		KEY_E:
+			armed_rematch()
 
 ## Everything the freecam listens for, read here rather than in free_camera.gd.
 ## The camera is inside the SubViewport, which only sees the input its container

@@ -117,7 +117,7 @@ func _draw_banner(vp: Vector2) -> void:
 	var font := UIFont.FONT
 	_draw_centered(font, vp, "RMB: look   WASD/Space/Ctrl: fly   Shift: faster   F: reset view",
 		vp.y - PAD - LINE_H, C_TEXT_DIM)
-	_draw_centered(font, vp, "R: new pair   1: rematch   Esc: cursor, then quit",
+	_draw_centered(font, vp, "R: new pair   1: rematch   E: armed rematch   Esc: cursor, then quit",
 		vp.y - PAD, C_TEXT_DIM)
 
 	var winner: BattleFish = _arena.winner
