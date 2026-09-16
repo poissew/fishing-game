@@ -16,5 +16,5 @@ price_curve = SubResource("Curve_etsia")
 id = 4
 name = "Trout"
 icon = ExtResource("1_etsia")
-size = Vector2i(4, 4)
+size = Vector2i(2, 2)
 metadata/_custom_type_script = "uid://b3tnjarefmysf"
