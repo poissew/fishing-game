@@ -107,14 +107,18 @@ func _draw_panel() -> void:
 	# Title bar
 	var title_r := Rect2(r.position, Vector2(r.size.x, TITLE_H))
 	draw_rect(title_r, C_TITLE_BG)
-	# Title text
-	var font := ThemeDB.fallback_font
-	draw_string(font, r.position + Vector2(PAD, TITLE_H - 2), "INVENTORY",
-		HORIZONTAL_ALIGNMENT_LEFT, -1, 8, C_TITLE_TEXT)
-	# Hint text right-aligned
-	draw_string(font, r.position + Vector2(r.size.x - PAD, TITLE_H - 2),
-		"RMB: rotate  |  E / drag to hands: equip",
-		HORIZONTAL_ALIGNMENT_RIGHT, -1, 6, C_SEP)
+	# Title text. monogram positions from the baseline, so TITLE_H minus the
+	# 3px that leaves the caps sitting level in the bar.
+	var font := UIFont.FONT
+	draw_string(font, r.position + Vector2(PAD, TITLE_H - 3), "INVENTORY",
+		HORIZONTAL_ALIGNMENT_LEFT, -1, UIFont.SIZE, C_TITLE_TEXT)
+	# Hint text, flush with the right edge of the title bar. draw_string ignores
+	# its alignment argument unless it is given a width to align inside, so
+	# measure the string and place it by hand.
+	var hint := "RMB: rotate  |  E / drag to hands: equip"
+	var hint_w := font.get_string_size(hint, HORIZONTAL_ALIGNMENT_LEFT, -1, UIFont.SIZE).x
+	draw_string(font, r.position + Vector2(r.size.x - PAD - hint_w, TITLE_H - 3), hint,
+		HORIZONTAL_ALIGNMENT_LEFT, -1, UIFont.SIZE, C_SEP)
 	# Separator under title
 	draw_line(Vector2(r.position.x, r.position.y + TITLE_H),
 		Vector2(r.position.x + r.size.x, r.position.y + TITLE_H), C_PANEL_BORDER)
@@ -162,7 +166,7 @@ func _draw_hand_zones() -> void:
 	if _held_item == null or _hands_view == null:
 		return
 	var hovered := _hand_slot_at_mouse()
-	var font := ThemeDB.fallback_font
+	var font := UIFont.FONT
 	for slot in Hands.SLOT_COUNT:
 		var r := _hands_view.get_screen_rect(slot)
 		if r.size.x <= 0.0:
@@ -170,8 +174,8 @@ func _draw_hand_zones() -> void:
 		var on := slot == hovered
 		draw_rect(r, C_ZONE_FILL if on else C_ZONE_FILL_DIM)
 		draw_rect(r, C_HELD_OK if on else C_SEP, false)
-		draw_string(font, r.position + Vector2(3, 9), HAND_LABELS[slot],
-			HORIZONTAL_ALIGNMENT_LEFT, -1, 7, C_SEP)
+		draw_string(font, r.position + Vector2(3, 3 + UIFont.CAP_H), HAND_LABELS[slot],
+			HORIZONTAL_ALIGNMENT_LEFT, -1, UIFont.SIZE, C_SEP)
 
 func _draw_item(item: ItemInstance, pos: Vector2, color: Color) -> void:
 	var fp   := Vector2(item.get_footprint()) * CELL_SIZE

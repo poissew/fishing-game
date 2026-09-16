@@ -65,8 +65,26 @@ SpellType (RefCounted)    — Type enum (PHYSICAL, FIRE, ICE, WATER, LIGHTNING, 
 - Because the game is sprite-first, **most of the scene ignores lights** — the ground is `SHADING_MODE_UNSHADED`, trees and held items are `Sprite3D`. So the cycle is carried mainly by a full-screen `ColorRect` multiplied over the viewport (`CanvasLayer` at layer `-1`: above the 3D world, below the UI on layer 0). It lives inside the low-res `SubViewport`, so it pixelates with everything else. Daytime tint is white, i.e. a no-op.
 - The sun and moon share one arc: each rises at the start of its phase, sits overhead halfway through, and sets at the end. Light colour, energy and sky dimming all interpolate continuously through dawn and dusk — `twilight_energy_ratio` is the shared floor both phases fade to, which is what stops the light popping at the handover.
 - `Camera3D` in `Player.tscn` carries its **own** `Environment`, which overrides the level's `WorldEnvironment`. `DayNightLighting._resolve_environment()` asks the current camera first for that reason.
-- `UIDayTimer` (`classes/ui/UI_DayTimer.gd` + `ui/UI_DayTimer.tscn`) is the centre-top countdown: real time left in the current day as MM:SS, starting each dawn at `20:00` and rolling over at `00:00`. It reads `daynight.time_left_in_day()` and draws with `ui/fonts/monogram.ttf`, which is configured for no antialiasing/hinting/subpixel positioning at load time so the pixel font stays crisp at 480x270.
+- `UIDayTimer` (`classes/ui/UI_DayTimer.gd` + `ui/UI_DayTimer.tscn`) is the centre-top countdown: real time left in the current day as MM:SS, starting each dawn at `20:00` and rolling over at `00:00`. It reads `daynight.time_left_in_day()` and draws with the shared `UIFont` (see **Text**), at `UIFont.SIZE * 2` so the countdown reads bigger than the panels.
 - `UIDayNightIcon` (`classes/ui/UI_DayNightIcon.gd` + `ui/UI_DayNightIcon.tscn`) is the top-right HUD readout: `ui/icons/sun.png` spinning on itself while the sun is up, swapped for `ui/icons/lune.png` pulsing dim→bright→dim once it sets. Both run off one `spin_period`, so the two phases share a tempo. `Player` instantiates it **before** the inventory and shop so their full-screen dimming backgrounds draw over it.
+
+### Text
+
+- Everything in the game is set in **monogram** (`ui/fonts/monogram.ttf`), a pixel font.
+- `UIFont` (`classes/ui/ui_font.gd`) is the single accessor for scripts that draw their own
+  text: `UIFont.FONT`, `UIFont.SIZE` (16) and `UIFont.CAP_H` (7, the height of a capital above
+  the baseline — `draw_string` positions by baseline, so this is what you need to centre text
+  in a bar of a known height).
+- Control nodes (`Label` and friends) get the same file from the `gui/theme/custom_font`
+  project setting instead, so a newly added Control is already right without touching `UIFont`.
+  Leave their `font_size` alone: Godot's default is already 16.
+- **Only whole multiples of `UIFont.SIZE` are usable.** monogram is drawn on a 16px grid — 5px
+  glyphs on a 6px monospaced advance, caps 7px, descenders 2px below the baseline. Anything in
+  between puts glyphs on half pixels, which is glaring at 480x270.
+- That 6px advance makes text noticeably wider than a proportional font would be, so panel
+  widths and column offsets in `UIInventory` / `UIShop` are sized in whole characters.
+- The pixel-crispness (no antialiasing, no hinting, no subpixel positioning, no oversampling)
+  lives in `ui/fonts/monogram.ttf.import`, not in any script.
 
 ### Inventory
 
@@ -106,6 +124,7 @@ SpellType (RefCounted)    — Type enum (PHYSICAL, FIRE, ICE, WATER, LIGHTNING, 
 
 - Data (static properties) lives in `*Data` / `Item` **Resources** (`.tres` files), stored in `data/`.
 - The game is sprite-only: items are drawn from their `Item.icon`, there are no 3D meshes for fish or held items.
+- All text is monogram at `UIFont.SIZE` (or a whole multiple of it) — see **Text**.
 - Runtime state lives in `*Instance` **Resources** that wrap a `data` reference.
 - All random rolls go through `randomizer.RNG` (the shared, pre-seeded `RandomNumberGenerator`).
 - Water biome is determined by `Area3D` groups on the water body; the `Bobber` reads those groups on entry.

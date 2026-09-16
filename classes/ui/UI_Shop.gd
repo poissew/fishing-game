@@ -11,16 +11,24 @@ signal sell_requested(item: ItemInstance)
 signal sell_all_requested()
 signal close_requested()
 
-const PANEL_W  := 260.0
-const ROW_H    := 11.0
+## monogram is monospaced at 6px per character, half again as wide as the font
+## this panel used to draw with, so everything below had to be re-fitted around
+## that: the panel is wider and the columns are spaced in whole characters.
+const PANEL_W  := 320.0
+const ROW_H    := 12.0
 const ROWS     := 12
 const PAD      := 4.0
 const TITLE_H  := 12.0
-const FOOTER_H := 16.0
-const ICON     := 9.0
-
-const FS_TITLE := 8
-const FS_ROW   := 7
+## Two lines: the sell-all button and the page indicator on one, the key hints
+## underneath. At this text width the three no longer fit side by side.
+const FOOTER_H := 32.0
+const ICON     := 10.0
+## Sell-all button, wide enough for "SELL ALL $999999".
+const BTN_W    := 100.0
+const BTN_H    := 13.0
+## Where a row's stats column starts, measured from the row's left edge. Leaves
+## the name 16 characters before it runs into them.
+const COL_DESC := 110.0
 
 # Panel colors — same palette as the inventory
 const C_PANEL_BG     := Color(0.09, 0.13, 0.09, 0.97)
@@ -74,10 +82,9 @@ func _ready() -> void:
 	_panel_rect = Rect2(xy, Vector2(PANEL_W, panel_h))
 	_list_rect  = Rect2(xy + Vector2(PAD, TITLE_H + PAD),
 		Vector2(PANEL_W - PAD * 2.0, ROWS * ROW_H))
-	var btn_w := 56.0
 	_btn_rect = Rect2(
-		Vector2(xy.x + PANEL_W - PAD - btn_w, _list_rect.end.y + PAD + 1.0),
-		Vector2(btn_w, FOOTER_H - 5.0))
+		Vector2(xy.x + PANEL_W - PAD - BTN_W, _list_rect.end.y + PAD),
+		Vector2(BTN_W, BTN_H))
 
 ## Shopkeeper the player is standing next to, or null. Drives the "[E]" prompt.
 func set_nearby(keeper: Shopkeeper) -> void:
@@ -130,40 +137,40 @@ func _draw() -> void:
 		_draw_prompt()
 
 func _draw_money() -> void:
-	draw_string(ThemeDB.fallback_font, Vector2(6, 12), "$ %d" % _wallet.money,
-		HORIZONTAL_ALIGNMENT_LEFT, -1, FS_TITLE, C_MONEY)
+	draw_string(UIFont.FONT, Vector2(6, 12), "$ %d" % _wallet.money,
+		HORIZONTAL_ALIGNMENT_LEFT, -1, UIFont.SIZE, C_MONEY)
 
 func _draw_prompt() -> void:
-	var font := ThemeDB.fallback_font
+	var font := UIFont.FONT
 	var vp   := get_viewport_rect().size
 	var text := "[E] %s" % _nearby.shop_name
-	var w    := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, FS_TITLE).x
+	var w    := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, UIFont.SIZE).x
 	var pos  := Vector2(floor((vp.x - w) / 2.0), vp.y - 24.0)
 	draw_rect(Rect2(pos + Vector2(-4, -9), Vector2(w + 8, 13)), C_PANEL_BG)
-	draw_string(font, pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, FS_TITLE, C_TITLE_TEXT)
+	draw_string(font, pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, UIFont.SIZE, C_TITLE_TEXT)
 
 func _draw_panel() -> void:
 	var r := _panel_rect
-	var font := ThemeDB.fallback_font
+	var font := UIFont.FONT
 	draw_rect(Rect2(r.position + Vector2(2, 2), r.size), Color(0, 0, 0, 0.45))
 	draw_rect(r, C_PANEL_BG)
 	draw_rect(Rect2(r.position, Vector2(r.size.x, TITLE_H)), C_TITLE_BG)
 	var title: String = _keeper.shop_name.to_upper() if _keeper != null else "SHOP"
 	draw_string(font, r.position + Vector2(PAD, TITLE_H - 3), title,
-		HORIZONTAL_ALIGNMENT_LEFT, -1, FS_TITLE, C_TITLE_TEXT)
+		HORIZONTAL_ALIGNMENT_LEFT, -1, UIFont.SIZE, C_TITLE_TEXT)
 	_draw_right(font, r.end.x - PAD, r.position.y + TITLE_H - 3,
-		"$ %d" % _wallet.money, FS_TITLE, C_MONEY)
+		"$ %d" % _wallet.money, C_MONEY)
 	draw_line(Vector2(r.position.x, r.position.y + TITLE_H),
 		Vector2(r.end.x, r.position.y + TITLE_H), C_PANEL_BORDER)
 	draw_rect(r, C_PANEL_BORDER, false)
 
 func _draw_rows() -> void:
-	var font := ThemeDB.fallback_font
+	var font := UIFont.FONT
 	draw_rect(_list_rect, C_ROW)
 	if _offers.is_empty():
-		draw_string(font, _list_rect.position + Vector2(PAD, 14),
+		draw_string(font, _list_rect.position + Vector2(PAD, ROW_H - 3.0),
 			"Nothing to sell. Go catch something.",
-			HORIZONTAL_ALIGNMENT_LEFT, -1, FS_ROW, C_TEXT_DIM)
+			HORIZONTAL_ALIGNMENT_LEFT, -1, UIFont.SIZE, C_TEXT_DIM)
 		return
 
 	for i in range(_scroll, mini(_scroll + ROWS, _offers.size())):
@@ -178,35 +185,39 @@ func _draw_rows() -> void:
 			Rect2(rect.position + Vector2(1, (ROW_H - ICON) * 0.5), Vector2(ICON, ICON)), false)
 
 		var base_y := rect.position.y + ROW_H - 3.0
-		draw_string(font, Vector2(rect.position.x + ICON + 4.0, base_y), item.data.name,
-			HORIZONTAL_ALIGNMENT_LEFT, -1, FS_ROW, C_TEXT)
-		draw_string(font, Vector2(rect.position.x + 84.0, base_y), _describe(item),
-			HORIZONTAL_ALIGNMENT_LEFT, -1, FS_ROW, C_TEXT_DIM)
+		draw_string(font, Vector2(rect.position.x + ICON + 5.0, base_y), item.data.name,
+			HORIZONTAL_ALIGNMENT_LEFT, -1, UIFont.SIZE, C_TEXT)
+		draw_string(font, Vector2(rect.position.x + COL_DESC, base_y), _describe(item),
+			HORIZONTAL_ALIGNMENT_LEFT, -1, UIFont.SIZE, C_TEXT_DIM)
 		_draw_right(font, rect.end.x - 2.0, base_y, "$ %d" % int(offer["price"]),
-			FS_ROW, C_MONEY)
+			C_MONEY)
 
 func _draw_footer() -> void:
-	var font := ThemeDB.fallback_font
-	var base_y := _btn_rect.end.y - 3.0
-	draw_string(font, Vector2(_panel_rect.position.x + PAD, base_y),
-		"click a line to sell  |  E / Esc: leave",
-		HORIZONTAL_ALIGNMENT_LEFT, -1, FS_ROW, C_SEP)
+	var font := UIFont.FONT
+	# Top line: page indicator, then the sell-all button flush with the panel's
+	# right edge. Caps are CAP_H tall, so this baseline centres them in BTN_H.
+	var base_y := _btn_rect.position.y + (BTN_H + UIFont.CAP_H) * 0.5
 	if _offers.size() > ROWS:
 		_draw_right(font, _btn_rect.position.x - 6.0, base_y,
 			"%d-%d / %d" % [_scroll + 1, mini(_scroll + ROWS, _offers.size()), _offers.size()],
-			FS_ROW, C_TEXT_DIM)
+			C_TEXT_DIM)
 	draw_rect(_btn_rect, C_BTN_HOVER if _btn_hovered else C_BTN)
 	draw_rect(_btn_rect, C_PANEL_BORDER, false)
 	var label := "SELL ALL $%d" % _total_value()
-	var w := font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, FS_ROW).x
-	draw_string(font, _btn_rect.position + Vector2((_btn_rect.size.x - w) * 0.5, ROW_H - 3.0),
-		label, HORIZONTAL_ALIGNMENT_LEFT, -1, FS_ROW, C_TITLE_TEXT)
+	var w := font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, UIFont.SIZE).x
+	draw_string(font, Vector2(_btn_rect.position.x + (BTN_W - w) * 0.5, base_y),
+		label, HORIZONTAL_ALIGNMENT_LEFT, -1, UIFont.SIZE, C_TITLE_TEXT)
+	# Bottom line: the key hints, on their own row under the button.
+	draw_string(font, Vector2(_panel_rect.position.x + PAD,
+			_btn_rect.end.y + 2.0 + UIFont.CAP_H),
+		"click a line to sell  |  E / Esc: leave",
+		HORIZONTAL_ALIGNMENT_LEFT, -1, UIFont.SIZE, C_SEP)
 
 func _draw_right(font: Font, right_x: float, baseline_y: float, text: String,
-		size: int, color: Color) -> void:
-	var w := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
+		color: Color) -> void:
+	var w := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, UIFont.SIZE).x
 	draw_string(font, Vector2(right_x - w, baseline_y), text,
-		HORIZONTAL_ALIGNMENT_LEFT, -1, size, color)
+		HORIZONTAL_ALIGNMENT_LEFT, -1, UIFont.SIZE, color)
 
 func _describe(item: ItemInstance) -> String:
 	if item is FishInstance:
