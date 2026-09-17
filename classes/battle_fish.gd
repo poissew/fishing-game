@@ -214,6 +214,10 @@ var _grounded := false
 ## Cooldown left per opponent, keyed by instance id.
 var _hit_cooldowns := {}
 
+## Whether this body is a decoy somebody put out rather than a fish that was
+## fished. Set once, when it is built - see _spawn_clone().
+var _is_decoy := false
+
 ## Seconds of stun left. A stunned fish does nothing whatsoever - no flopping,
 ## no casting, and no damage to whatever walks into it - but it can still be
 ## hurt, and anything already ticking on it keeps ticking.
@@ -622,20 +626,15 @@ func _flop() -> void:
 	_wiggle_amount = 1.0
 
 ## A random direction along the floor, pulled towards chase_target by however
-## much of chase_bias the distance leaves in play - or away from the nearest
-## fish instead, by flee_bias, when this one is a coward.
+## much of chase_bias the distance leaves in play - or away from something,
+## by flee_bias, when this one is a coward.
 func _flop_direction() -> Vector3:
 	var wander := _random_horizontal()
 	var bias := chase_bias
 	var focus: Node3D = chase_target
 	if _coward != null:
-		# A coward runs from whoever is actually closest rather than from
-		# whoever the arena pointed it at - the thing about to catch it is the
-		# thing worth running from.
 		bias = _coward.flee_bias
-		var nearest := _nearest_enemy()
-		if nearest != null:
-			focus = nearest
+		focus = _flee_from()
 	if focus == null or not is_instance_valid(focus) or bias <= 0.0:
 		return wander
 	var towards := focus.global_position - global_position
@@ -648,6 +647,22 @@ func _flop_direction() -> Vector3:
 	if _coward != null:
 		heading = -heading
 	return wander.lerp(heading, bias * _chase_strength(distance)).normalized()
+
+## What a coward is running from.
+##
+## A decoy takes it in like it takes anybody in: once something has pointed this
+## fish at a clone, that is the thing it runs from, however close the real one
+## gets. Nothing has pointed it anywhere - or what it was pointed at is a real
+## fish - and it goes back to running from whatever is actually closest, which
+## is the thing about to catch it.
+func _flee_from() -> BattleFish:
+	# Validity before the cast, always: chase_target holds whatever it was given
+	# and the arena can free that at any time.
+	if is_instance_valid(chase_target):
+		var lure := chase_target as BattleFish
+		if lure != null and lure.is_decoy() and lure.is_alive():
+			return lure
+	return _nearest_enemy()
 
 ## How much of chase_bias - or of a coward's flee_bias - survives at `distance`:
 ## all of it up close, falling off to CHASE_FAR_SCALE of it once the other fish
@@ -811,6 +826,7 @@ func _spawn_clone(spell: CloneSpellData) -> void:
 	var decoy := BattleFish.spawn(copy)
 	if decoy == null:
 		return
+	decoy._is_decoy = true
 	# Its own team, so it never fights back and this fish never turns on it.
 	decoy.team = team
 	decoy.tint = tint
@@ -940,6 +956,12 @@ func stun(seconds: float) -> void:
 	# Whatever it was in the middle of, it is not any more.
 	_end_hang()
 	stunned.emit(_stun_left)
+
+## Whether this is a clone somebody left standing about. Fighters chase a decoy
+## because they were pointed at one; a coward has to ask, because it decides for
+## itself what to run from.
+func is_decoy() -> bool:
+	return _is_decoy
 
 func is_stunned() -> bool:
 	return _stun_left > 0.0
