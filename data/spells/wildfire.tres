@@ -1,7 +1,6 @@
 [gd_resource type="Resource" script_class="BurnZoneSpellData" format=3]
 
 [ext_resource type="Script" path="res://classes/spells/burn_zone_spell_data.gd" id="1_wfir"]
-[ext_resource type="SpriteFrames" uid="uid://cmvxh4wegm7xa" path="res://sprites/spells/explosion.tres" id="2_wfir"]
 
 [resource]
 script = ExtResource("1_wfir")
@@ -16,5 +15,4 @@ height = 1.0
 duration = 4.0
 interval = 0.5
 damage_scale = 0.25
-frames = ExtResource("2_wfir")
-zone_size = 0.55
+tint = Color(1.0, 0.22, 0.14, 0.88)

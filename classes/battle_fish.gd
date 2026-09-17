@@ -1166,7 +1166,12 @@ func _tick_landing() -> void:
 ## rather than under it, like every other effect, so it stays where it was lit
 ## and outlives the fish that lit it.
 func _light_zone(spell: BurnZoneSpellData, damage: int) -> void:
-	var zone := SpellFireZone.light(_effect_parent(), global_position, spell, damage, self)
+	# On the floor, not at the middle of the fish: the marker shows the ground
+	# the zone covers, so it has to be on the ground. A resting fish sits half
+	# its drawn height above it.
+	var ground := global_position
+	ground.y -= _sprite_height(world_length()) * 0.5
+	var zone := SpellFireZone.light(_effect_parent(), ground, spell, damage, self)
 	if zone != null:
 		zone.hit_fish.connect(_on_bubble_hit)
 

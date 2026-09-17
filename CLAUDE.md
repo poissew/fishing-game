@@ -45,7 +45,7 @@ SpellData (Resource)      — static spell definition: name, trigger, base_power
 ├── CowardSpellData       — adds flee_bias, phys_scale; a PASSIVE, never cast, read off the fish
 ├── BoxerSpellData        — adds conversion, magic_scale; a PASSIVE that moves magic into fists
 ├── ArmourSpellData       — adds flat, per_power; a PASSIVE that eats physical damage
-├── BurnZoneSpellData     — adds radius, duration, interval; fires ON_LANDING, scales off phys
+├── BurnZoneSpellData     — adds radius, duration, interval, tint; fires ON_LANDING, scales off phys
 ├── LastStandSpellData    — adds duration, power_scale; a PASSIVE that refuses one killing blow
 └── CloneSpellData        — adds duration, health_scale; fires WHEN_READY, puts a decoy on the floor
 SpellInstance (Resource)  — runtime spell: data ref + cooldown_left; tick/is_ready/try_cast
@@ -53,7 +53,7 @@ SpellType (RefCounted)    — Type enum (PHYSICAL, FIRE, ICE, WATER, LIGHTNING, 
 SpellExplosion (AnimatedSprite3D) — the animation a blast draws; plays once, frees itself
 SpellBubble (Sprite3D)    — one bubble in flight; moves itself, pops on the first fish it may hit
 SpellFlash (Sprite3D)     — the pop of a camera; grows, fades, frees itself
-SpellFireZone (AnimatedSprite3D) — a patch of burning floor; burns what stands in it, goes out
+SpellFireZone (Sprite3D)  — a flat marker on the floor; burns what stands on it, goes out
 ```
 
 ### Loot system
@@ -163,7 +163,9 @@ FISHING  ──day runs out──>  SELECTION  ──fish picked──>  BATTLE 
 - **Wildfire** (`data/spells/wildfire.tres`, `BurnZoneSpellData`) leaves a patch of fire wherever the fish comes down: `radius` (0.7) across and `height` (1.0) tall, burning for `duration` (4 s), taking a tick out of anything standing in it every `interval` (0.5 s). It is **the one spell that scales off physical damage** — `damage_scale` (0.25) of the carrier's `phys_dmg` a tick, so a PHYS 12 fish burns for 3 at a time, eight times over.
 - **The PHYSICAL type is what does that**, not a special case: `SpellInstance.caster_power()` hands a non-magical spell the fish's `phys_dmg`. The same choice makes the burn count as physical damage on the way *in*, so `ArmourSpellData` takes the edge off it — Wildfire is the first spell to use the `physical` flag on the damage entry points, and it lands exactly as designed. Watch the numbers, though: **a 5-point Sandbag absorbs a 3-point burn tick entirely**, so a sandbagged fish walks through this fire without noticing it.
 - **A zone never burns whoever lit it.** The fish lands in the middle of its own fire every single time, so anything else would be a spell that kills its owner. `SpellFireZone` keeps a copy of the caster's team and rules the caster out by identity, the same way `SpellBubble` does, so it also keeps burning after that fish has been freed.
-- The animation is **stretched over the whole burn** rather than looped — `speed_scale` is set from the frames' own length against `duration`. The explosion frames it is given start as a flare and end in smoke, which is the shape of a fire burning itself out, so one slow playthrough is the whole effect and nothing has to loop or be duplicated.
+- **The zone is drawn as a flat marker lying on the floor**, not as a puff of flame: `texture` (the project icon by default) tinted `tint` red, laid down with `global_rotation` and drawn at exactly `radius * 2` across, so the picture and the hitbox are the same thing and the footprint can be read at a glance. It is dropped to the floor rather than to the fish's middle — a resting fish sits half its drawn height above the ground — and lifted `GROUND_LIFT` (2 cm) clear of it.
+- **A `Decal` node would be the other way to do it, and would not render.** The project's `config/features` says GL Compatibility, where Godot draws no decals at all. (It currently *boots* Forward+, because no `[rendering]` section actually sets the method — worth knowing, and worth not relying on.) A flat unshaded quad looks the same on a flat floor and works under either renderer.
+- It pulses between `PULSE_MIN` and full alpha while it burns and fades out over the last `FADE_LAST` of its life, so a zone about to go out looks like one. The pulse floor is a **readability** setting, not a flourish: at 0.55 the marker sank into the dark arena floor.
 - It fires often: landings are the commonest thing a fish does, so over a 60-second arena soak Wildfire cast 16 times against Detonate's 10 — the 3-second cooldown is all that holds it back.
 - **Immunity** (`data/spells/immunity.tres`, `LastStandSpellData`) is the fourth passive and the only one that changes whether a fish dies. The blow that would have finished it leaves it on **one** point of health instead, nothing can take that point off it for `duration` (2 s), and then it dies of the blow it was holding off. While the clock runs it fights with `power_scale` (0.1) of its attack and magic — a PHYS 20, MAG 10 fish swings for 2 and casts for 1.
 - **It is refused in `_refuse_killing_blow()`, inside `_apply_damage()`**, which is the one place health ever comes off. That means there is no way to die that goes around it: a touch, a blast, a burn, a Trauma tick and the arena's own sudden-death drain all come past the same gate.
