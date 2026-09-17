@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="BubbleSpellData" format=3 uid="uid://b1ive4xj3w823"]
+
+[ext_resource type="Script" uid="uid://getbqpkgl7ef" path="res://classes/spells/bubble_spell_data.gd" id="1_jao5a"]
+
+[resource]
+script = ExtResource("1_jao5a")
+count = 1
+interval = 0.0
+hang_time = 0.2
+damage_scale = 0.6
+base_speed = 8.0
+speed_per_power = 2.0
+knockback_scale = 3.0
+name = "Snipe"
+description = "At the top of its next hop the fish hangs there and spits three bubbles at whatever it is fighting. Slow enough to be dodged."
+trigger = 2
+base_type = 3
+base_cooldown = 6
