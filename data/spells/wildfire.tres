@@ -1,6 +1,6 @@
-[gd_resource type="Resource" script_class="BurnZoneSpellData" format=3]
+[gd_resource type="Resource" script_class="BurnZoneSpellData" format=3 uid="uid://yxaywjfwcpv5"]
 
-[ext_resource type="Script" path="res://classes/spells/burn_zone_spell_data.gd" id="1_wfir"]
+[ext_resource type="Script" uid="uid://b76yqjcamkfb1" path="res://classes/spells/burn_zone_spell_data.gd" id="1_wfir"]
 
 [resource]
 script = ExtResource("1_wfir")
@@ -8,11 +8,4 @@ name = "Wildfire"
 description = "Comes down hard enough to set the ground alight. Whatever it leaves behind keeps burning for a while, and this one knows better than to stand in it."
 trigger = 6
 base_power = 0
-base_type = 0
 base_cooldown = 3
-radius = 0.7
-height = 1.0
-duration = 4.0
-interval = 0.5
-damage_scale = 0.25
-tint = Color(1.0, 0.22, 0.14, 0.88)
