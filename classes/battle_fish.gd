@@ -864,8 +864,16 @@ func _end_clone() -> void:
 	_clone_left = 0.0
 	var clone_valid := is_instance_valid(clone)
 	for pair in _lured:
+		# Asked before the cast and never after: `as` on a freed object is
+		# itself an error, and it takes the rest of this function down with it -
+		# including the queue_free() at the bottom, which is how a stale lure
+		# used to leave a clone standing on the floor for good. A fish freed
+		# while the clone was out is an ordinary thing: a round torn down around
+		# it, or a rematch.
+		if not is_instance_valid(pair[0]):
+			continue
 		var other := pair[0] as BattleFish
-		if not is_instance_valid(other):
+		if other == null:
 			continue
 		# Something else has pointed it somewhere since: leave that alone.
 		if clone_valid and other.chase_target != clone:
