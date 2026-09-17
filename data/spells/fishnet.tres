@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="WardSpellData" format=3]
+
+[ext_resource type="Script" path="res://classes/spells/ward_spell_data.gd" id="1_fnet"]
+
+[resource]
+script = ExtResource("1_fnet")
+name = "Fishnet"
+description = "Tangled in something that drinks magic. Three tenths of every spell thrown at this one never gets through the mesh."
+trigger = 3
+base_power = 0
+base_type = 0
+base_cooldown = 0
+resistance = 0.3

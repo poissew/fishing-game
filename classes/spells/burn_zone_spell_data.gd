@@ -7,6 +7,9 @@
 ## same choice is what makes the burn count as physical damage on the way in,
 ## so `ArmourSpellData` takes the edge off it like any other punch.
 ##
+## It is drawn as a flat marker on the floor rather than as a puff of flame,
+## because the useful thing about a damage zone is knowing exactly where it is.
+##
 ## The zone does not burn whoever lit it. A fish lands in the middle of its own
 ## fire every time it drops one, so anything else would be a spell that kills
 ## its owner.
@@ -29,11 +32,13 @@ extends SpellData
 @export var damage_scale: float = 0.25
 
 @export_category("Look")
-## The animation the patch plays. It is stretched over the whole `duration`
-## rather than looped, so a zone flares up and burns down to smoke on its own.
-@export var frames: SpriteFrames
-## World height it is drawn at.
-@export_range(0.05, 5.0, 0.05, "suffix:m") var zone_size: float = 0.55
+## Laid flat on the ground and drawn at exactly `radius` across, so the marker
+## and the hitbox are the same thing and the zone can be read at a glance.
+## Left empty, SpellFireZone falls back to the project icon.
+@export var texture: Texture2D
+## What it is drawn in. The alpha is the marker's own: it pulses between a
+## share of this while it burns and fades out at the end.
+@export var tint: Color = Color(1.0, 0.22, 0.14, 0.88)
 
 ## A share of the caster's physical damage - `caster_power` is phys_dmg for a
 ## PHYSICAL spell, which is the whole reason this one is typed that way.

@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="CloneSpellData" format=3]
+
+[ext_resource type="Script" path="res://classes/spells/clone_spell_data.gd" id="1_decy"]
+
+[resource]
+script = ExtResource("1_decy")
+name = "Decoy"
+description = "Leaves a copy of itself flopping about and lets whatever it is fighting go for that instead. The copy cannot fight back, and it does not last."
+trigger = 5
+base_power = 0
+base_type = 6
+base_cooldown = 8
+duration = 4.0
+health_scale = 0.5
+spawn_offset = 0.6

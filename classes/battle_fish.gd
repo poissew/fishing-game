@@ -64,6 +64,12 @@ const MAX_LEN  := 2.20
 ## worth speaking of.
 const MIN_RADIUS := 0.03
 
+## Tint a fish on its last legs is washed out towards, and how much of it is
+## mixed in. Paler than the stun, and it beats the stun when a fish is somehow
+## both: being about to die is the more urgent news.
+const LAST_STAND_COLOR := Color(0.85, 0.95, 1.00, 1.0)
+const LAST_STAND_TINT_MIX := 0.70
+
 ## Tint a stunned fish is washed out towards, and how much of it is mixed in.
 ## It has to read at a glance: a fish standing still because it is stunned and a
 ## fish standing still because nothing is happening look the same otherwise.
@@ -149,6 +155,33 @@ const KNOCKBACK_MAX_SPEED := 2.5
 ## fires at all. What keeps the floor out of it is the _grounded check, not this.
 const PEAK_RISE := 0.02
 
+## What kind of damage is arriving, which is what decides which of a fish's
+## defences gets a say in it.
+##
+## It was a plain "is this physical" bool until there was something that
+## defended against magic, at which point `false` turned out to mean three
+## different things: a spell, the arena's own clock, and Immunity collecting on
+## the blow it had been holding off. A ward that applied to all three would let
+## a fish sit out sudden death and survive its own last stand.
+enum DamageKind {
+	## A touch, or a PHYSICAL spell. ArmourSpellData takes the edge off it.
+	PHYSICAL,
+	## Any spell that is not PHYSICAL. WardSpellData turns a share of it aside.
+	MAGICAL,
+	## Neither, and nothing defends against it: the sudden-death drain, and the
+	## blow Immunity was holding off finally landing. A clock that armour could
+	## sit out would not be a clock.
+	UNTYPED,
+}
+
+## Which of those a spell deals, read off its own type. Static so that the
+## effects a spell leaves lying about - a bubble, a patch of fire - can ask
+## without holding a fish.
+static func kind_of(data: SpellData) -> DamageKind:
+	if data == null:
+		return DamageKind.UNTYPED
+	return DamageKind.MAGICAL if data.is_magical() else DamageKind.PHYSICAL
+
 ## Stands in for "this damage came from nowhere in particular". Damage carrying
 ## it leaves the fish where it stands instead of picking a direction on its own.
 const NO_ORIGIN := Vector3.INF
@@ -159,6 +192,9 @@ signal dealt_damage(target: BattleFish, amount: int)
 ## Fired when this fish loses health. `from` is the fish that did it, or null
 ## for damage that came from somewhere else.
 signal took_damage(amount: int, from: BattleFish)
+## Fired when the blow that would have killed this fish is held off instead,
+## with how long it has left on its feet.
+signal last_stand_started(seconds: float)
 ## Fired when this fish is stunned, with how long it is out of action for.
 signal stunned(seconds: float)
 ## Fired when this fish spends a spell, before the spell's damage lands.
@@ -205,6 +241,10 @@ var _grounded := false
 ## Cooldown left per opponent, keyed by instance id.
 var _hit_cooldowns := {}
 
+## Whether this body is a decoy somebody put out rather than a fish that was
+## fished. Set once, when it is built - see _spawn_clone().
+var _is_decoy := false
+
 ## Seconds of stun left. A stunned fish does nothing whatsoever - no flopping,
 ## no casting, and no damage to whatever walks into it - but it can still be
 ## hurt, and anything already ticking on it keeps ticking.
@@ -227,6 +267,22 @@ var _coward: CowardSpellData = null
 var _boxer: BoxerSpellData = null
 ## And its ArmourSpellData: the one that takes the edge off a punch.
 var _armour: ArmourSpellData = null
+## Its WardSpellData: the one that drinks a share of every spell.
+var _ward: WardSpellData = null
+## And its LastStandSpellData: the one that refuses the killing blow, once.
+var _last_stand: LastStandSpellData = null
+
+## Seconds left of that stay of execution, and whether it has been spent. The
+## fish cannot be taken below one point of health while the first is running,
+## and cannot have it again once the second is true.
+var _last_stand_left := 0.0
+var _last_stand_used := false
+
+## The clone this fish is hiding behind, how long it has left, and what every
+## fish it lured off was looking at before - so they can be given it back.
+var _clone: BattleFish = null
+var _clone_left := 0.0
+var _lured: Array = []
 
 ## The volley a spell left running: what there is still to fire, at what, and
 ## how long the fish hangs there before gravity gets it back.
@@ -284,6 +340,10 @@ func bind_fish(fish_instance: FishInstance) -> void:
 		fish.died.connect(_on_fish_died)
 	_clear_dot()
 	_stun_left = 0.0
+	# A fish sent into the arena again gets its refusal back with its health.
+	_last_stand_left = 0.0
+	_last_stand_used = false
+	_end_clone()
 	_read_passives()
 	# bind_fish() is usually called before the body is in the tree, so the
 	# @onready nodes are not there yet - _ready() picks the work back up.
@@ -296,6 +356,8 @@ func _read_passives() -> void:
 	_coward = null
 	_boxer = null
 	_armour = null
+	_ward = null
+	_last_stand = null
 	if fish == null:
 		return
 	for spell in fish.spells:
@@ -310,6 +372,12 @@ func _read_passives() -> void:
 		var armour := spell.data as ArmourSpellData
 		if armour != null:
 			_armour = armour
+		var ward := spell.data as WardSpellData
+		if ward != null:
+			_ward = ward
+		var last_stand := spell.data as LastStandSpellData
+		if last_stand != null:
+			_last_stand = last_stand
 
 ## Reads the size, weight and icon off the fish and builds the body out of them.
 func _apply_fish() -> void:
@@ -381,6 +449,10 @@ func phys_dmg() -> int:
 		power += int(round(fish.magic_dmg * _boxer.conversion))
 	if _coward != null:
 		power = int(round(power * _coward.phys_scale))
+	# Last of all, and on whatever the rest of them left: a fish on its way out
+	# swings with a tenth of what it had, not a tenth of what it started with.
+	if is_in_last_stand():
+		power = int(round(power * _last_stand.power_scale))
 	return maxi(0, power)
 
 ## Damage this fish's spells scale off, once its passives have had their say: a
@@ -388,9 +460,12 @@ func phys_dmg() -> int:
 func magic_dmg() -> int:
 	if fish == null:
 		return 0
+	var power := fish.magic_dmg
 	if _boxer != null:
-		return maxi(0, int(round(fish.magic_dmg * _boxer.magic_scale)))
-	return fish.magic_dmg
+		power = int(round(power * _boxer.magic_scale))
+	if is_in_last_stand():
+		power = int(round(power * _last_stand.power_scale))
+	return maxi(0, power)
 
 ## What this fish takes off every physical hit before it lands. 0 for anything
 ## not carrying armour, and worked out from magic_dmg() rather than the fish's
@@ -400,6 +475,12 @@ func physical_reduction() -> int:
 	if _armour == null:
 		return 0
 	return _armour.reduction(magic_dmg())
+
+## The share of every magical hit this fish never receives. 0.0 for anything
+## not carrying a ward. Unlike armour this is a proportion, so it scales with
+## the spell and can never take one to nothing.
+func magic_resistance() -> float:
+	return clampf(_ward.resistance, 0.0, 1.0) if _ward != null else 0.0
 
 ## The stat a spell of this type scales off, as this body reckons it. Every cast
 ## goes through here rather than reading the FishInstance, so a passive that
@@ -420,7 +501,7 @@ func health_ratio() -> float:
 ## it, and the damage is physical, which is the kind armour is any use against.
 func take_damage(amount: int, from: BattleFish = null) -> int:
 	var origin := from.global_position if from != null and is_instance_valid(from) else NO_ORIGIN
-	return _apply_damage(amount, from, origin, 1.0, true)
+	return _apply_damage(amount, from, origin, 1.0, DamageKind.PHYSICAL)
 
 ## Drives this fish into the floor and takes health off it. The shove is
 ## straight down rather than away from anything, and the damage itself carries
@@ -430,10 +511,10 @@ func take_damage(amount: int, from: BattleFish = null) -> int:
 ## A fish already on the floor simply takes the damage: the impulse has nowhere
 ## to put it.
 func slam_down(amount: int, slam_scale: float, from: BattleFish = null,
-		physical := false) -> int:
+		kind := DamageKind.UNTYPED) -> int:
 	if not is_alive():
 		return 0
-	var dealt := _apply_damage(amount, from, NO_ORIGIN, 0.0, physical)
+	var dealt := _apply_damage(amount, from, NO_ORIGIN, 0.0, kind)
 	_shove(Vector3.DOWN, amount, slam_scale, 0.0)
 	return dealt
 
@@ -441,30 +522,37 @@ func slam_down(amount: int, slam_scale: float, from: BattleFish = null,
 ## something it is already under. `from` is still credited with it, so a health
 ## bar and a battle log can name whoever started it, but the fish is not shoved:
 ## there is no direction for a tick of damage to have come from.
-func take_tick_damage(amount: int, from: BattleFish = null, physical := false) -> int:
-	return _apply_damage(amount, from, NO_ORIGIN, 0.0, physical)
+func take_tick_damage(amount: int, from: BattleFish = null,
+		kind := DamageKind.UNTYPED) -> int:
+	return _apply_damage(amount, from, NO_ORIGIN, 0.0, kind)
 
 ## Damage from a point in the world rather than from a fish - a spell's blast.
 ## The shove is outwards from `origin`, so everything caught is thrown away from
 ## the explosion instead of away from whoever set it off, and `knockback_scale`
 ## is how much harder than a touch of the same size it throws.
 func take_blast(amount: int, origin: Vector3, knockback_scale: float = 1.0,
-		from: BattleFish = null, physical := false) -> int:
-	return _apply_damage(amount, from, origin, knockback_scale, physical)
+		from: BattleFish = null, kind := DamageKind.UNTYPED) -> int:
+	return _apply_damage(amount, from, origin, knockback_scale, kind)
 
 ## The one place health actually comes off. `origin` is what the fish is shoved
-## away from, NO_ORIGIN for damage that should not move it at all, and
-## `physical` says whether armour gets a say in it.
+## away from, NO_ORIGIN for damage that should not move it at all, and `kind`
+## says which of the fish's defences gets a say in it.
 func _apply_damage(amount: int, from: BattleFish, origin: Vector3,
-		knockback_scale: float, physical := false) -> int:
+		knockback_scale: float, kind := DamageKind.UNTYPED) -> int:
 	if not is_alive():
 		return 0
-	# Armour comes off what the hit is worth, never off what it shoves with: a
-	# sandbagged fish is harder to hurt, not harder to move, and one that shrugs
-	# a touch off entirely still gets knocked about by it.
+	# Taken off what the hit is worth, never off what it shoves with: a warded
+	# or sandbagged fish is harder to hurt, not harder to move, and one that
+	# shrugs a touch off entirely still gets knocked about by it.
 	var landed := amount
-	if physical:
-		landed = maxi(0, landed - physical_reduction())
+	match kind:
+		DamageKind.PHYSICAL:
+			landed = maxi(0, landed - physical_reduction())
+		DamageKind.MAGICAL:
+			landed = maxi(0, int(round(landed * (1.0 - magic_resistance()))))
+	# Immunity: the blow that would have finished it starts a stay of execution
+	# instead, and nothing gets through that last point while it runs.
+	landed = _refuse_killing_blow(landed)
 	var dealt := fish.take_damage(landed)
 	# Knocked back by the size of the hit, not by the health it managed to take
 	# off: a killing blow shoves just as hard when the fish had one point left
@@ -521,6 +609,8 @@ func can_hit(other: BattleFish) -> bool:
 
 func _physics_process(delta: float) -> void:
 	_tick_hit_cooldowns(delta)
+	_tick_last_stand(delta)
+	_tick_clone(delta)
 	_tick_stun(delta)
 	_tick_dot(delta)
 	if fish != null and is_alive():
@@ -579,20 +669,15 @@ func _flop() -> void:
 	_wiggle_amount = 1.0
 
 ## A random direction along the floor, pulled towards chase_target by however
-## much of chase_bias the distance leaves in play - or away from the nearest
-## fish instead, by flee_bias, when this one is a coward.
+## much of chase_bias the distance leaves in play - or away from something,
+## by flee_bias, when this one is a coward.
 func _flop_direction() -> Vector3:
 	var wander := _random_horizontal()
 	var bias := chase_bias
 	var focus: Node3D = chase_target
 	if _coward != null:
-		# A coward runs from whoever is actually closest rather than from
-		# whoever the arena pointed it at - the thing about to catch it is the
-		# thing worth running from.
 		bias = _coward.flee_bias
-		var nearest := _nearest_enemy()
-		if nearest != null:
-			focus = nearest
+		focus = _flee_from()
 	if focus == null or not is_instance_valid(focus) or bias <= 0.0:
 		return wander
 	var towards := focus.global_position - global_position
@@ -605,6 +690,22 @@ func _flop_direction() -> Vector3:
 	if _coward != null:
 		heading = -heading
 	return wander.lerp(heading, bias * _chase_strength(distance)).normalized()
+
+## What a coward is running from.
+##
+## A decoy takes it in like it takes anybody in: once something has pointed this
+## fish at a clone, that is the thing it runs from, however close the real one
+## gets. Nothing has pointed it anywhere - or what it was pointed at is a real
+## fish - and it goes back to running from whatever is actually closest, which
+## is the thing about to catch it.
+func _flee_from() -> BattleFish:
+	# Validity before the cast, always: chase_target holds whatever it was given
+	# and the arena can free that at any time.
+	if is_instance_valid(chase_target):
+		var lure := chase_target as BattleFish
+		if lure != null and lure.is_decoy() and lure.is_alive():
+			return lure
+	return _nearest_enemy()
 
 ## How much of chase_bias - or of a coward's flee_bias - survives at `distance`:
 ## all of it up close, falling off to CHASE_FAR_SCALE of it once the other fish
@@ -638,6 +739,10 @@ func _tick_look(delta: float) -> void:
 	if _flash_left > 0.0:
 		_flash_left = maxf(0.0, _flash_left - delta)
 		_sprite.modulate = tint.lerp(HIT_COLOR, _flash_left / HIT_FLASH)
+	elif is_in_last_stand():
+		# Gone pale, and ahead of the stun: a fish about to die reads as that
+		# first and as dazzled second.
+		_sprite.modulate = tint.lerp(LAST_STAND_COLOR, LAST_STAND_TINT_MIX)
 	elif is_stunned():
 		# Washed out, the way anything looks after a camera has gone off in it.
 		_sprite.modulate = tint.lerp(STUN_COLOR, STUN_TINT_MIX)
@@ -741,6 +846,147 @@ func _apply_on_hit(data: SpellData, other: BattleFish, damage: int) -> void:
 	if dot != null and other != null and is_instance_valid(other):
 		other.apply_dot(dot, damage, self)
 
+# -- Clone --------------------------------------------------------------------
+
+## Puts a copy of this fish on the floor beside it and points everything that
+## was fighting it at the copy instead.
+##
+## The copy is a real battler, so it flops and collides and can be hit, and it
+## is deliberately **not** added to whatever the arena handed `BattleRound` -
+## nothing that cannot win a round should be able to hold one open.
+func _spawn_clone(spell: CloneSpellData) -> void:
+	if fish == null or fish.data == null or _clone != null:
+		return
+	var copy := fish.duplicate() as FishInstance
+	if copy == null:
+		return
+	# Everything that makes a fish dangerous, taken out: it is scenery that
+	# happens to look exactly like the fish it came off.
+	copy.phys_dmg = 0
+	copy.magic_dmg = 0
+	copy.spells = [] as Array[SpellInstance]
+	copy.health = maxi(1, int(round(fish.health * spell.health_scale)))
+	var decoy := BattleFish.spawn(copy)
+	if decoy == null:
+		return
+	decoy._is_decoy = true
+	# Its own team, so it never fights back and this fish never turns on it.
+	decoy.team = team
+	decoy.tint = tint
+	# It wanders: a decoy that made straight for the enemy would give itself up.
+	decoy.chase_bias = 0.0
+	_effect_parent().add_child(decoy)
+	decoy.global_position = global_position + _random_horizontal() * spell.spawn_offset
+	_clone = decoy
+	_clone_left = maxf(spell.duration, 0.01)
+	# The clone keeps its own clock as well as this one, because this one dies
+	# with the fish: an arena that frees a battler mid-round - the way a
+	# rematch does - would otherwise leave the decoy standing there for good,
+	# with nothing left alive that knows to take it away. The timer belongs to
+	# the tree and Godot drops the connection if the clone goes first.
+	get_tree().create_timer(_clone_left).timeout.connect(decoy.queue_free)
+	_lure_enemies()
+
+## Points everything that could be fighting this fish at the clone, keeping what
+## each of them was looking at so it can be handed back.
+func _lure_enemies() -> void:
+	_lured.clear()
+	if _clone == null:
+		return
+	for node in get_tree().get_nodes_in_group(GROUP):
+		var other := node as BattleFish
+		# can_hit(self) asks it the one question that matters: is this fish
+		# something you would fight?
+		if other == null or other == _clone or not other.can_hit(self):
+			continue
+		_lured.append([other, other.chase_target])
+		other.chase_target = _clone
+
+## Counts the clone down, and takes it away early if it is killed or if the fish
+## it came off dies first.
+func _tick_clone(delta: float) -> void:
+	if _clone_left <= 0.0:
+		return
+	if not is_instance_valid(_clone) or not _clone.is_alive() or not is_alive():
+		_end_clone()
+		return
+	_clone_left = maxf(0.0, _clone_left - delta)
+	if _clone_left <= 0.0:
+		_end_clone()
+
+## Takes the clone away and gives everything it lured off its own target back -
+## but only if that is still the clone, so an arena that has since repointed a
+## fish somewhere else keeps its say.
+func _end_clone() -> void:
+	var clone := _clone
+	_clone = null
+	_clone_left = 0.0
+	var clone_valid := is_instance_valid(clone)
+	for pair in _lured:
+		# Asked before the cast and never after: `as` on a freed object is
+		# itself an error, and it takes the rest of this function down with it -
+		# including the queue_free() at the bottom, which is how a stale lure
+		# used to leave a clone standing on the floor for good. A fish freed
+		# while the clone was out is an ordinary thing: a round torn down around
+		# it, or a rematch.
+		if not is_instance_valid(pair[0]):
+			continue
+		var other := pair[0] as BattleFish
+		if other == null:
+			continue
+		# Something else has pointed it somewhere since: leave that alone.
+		if clone_valid and other.chase_target != clone:
+			continue
+		# And never hand back a target that has itself been freed in the
+		# meantime - that is a round being torn down around us.
+		other.chase_target = pair[1] if is_instance_valid(pair[1]) else null
+	_lured.clear()
+	if clone_valid:
+		clone.queue_free()
+
+# -- Last stand ---------------------------------------------------------------
+
+## Caps `amount` at whatever would leave the fish on one point of health, when
+## it is carrying Immunity and this blow would otherwise finish it - and starts
+## the clock, or keeps it if one is already running. Returns the damage that may
+## actually be taken.
+##
+## Everything runs through _apply_damage(), so there is no way to be killed that
+## does not come past here: a touch, a blast, a burn, the arena's own drain.
+func _refuse_killing_blow(amount: int) -> int:
+	if _last_stand == null or fish == null:
+		return amount
+	# Not fatal: nothing to refuse.
+	if amount < fish.current_health:
+		return amount
+	if is_in_last_stand():
+		return maxi(0, fish.current_health - 1)
+	if _last_stand_used:
+		return amount
+	_last_stand_used = true
+	_last_stand_left = maxf(_last_stand.duration, 0.01)
+	last_stand_started.emit(_last_stand_left)
+	return maxi(0, fish.current_health - 1)
+
+## Counts the stay of execution down, and collects on it when it runs out. The
+## fish dies here of the blow it was holding off - through the ordinary damage
+## path, so the death is reported the way any other is.
+func _tick_last_stand(delta: float) -> void:
+	if _last_stand_left <= 0.0:
+		return
+	_last_stand_left = maxf(0.0, _last_stand_left - delta)
+	if _last_stand_left > 0.0:
+		return
+	if fish != null and fish.is_alive():
+		take_tick_damage(fish.current_health)
+
+func is_in_last_stand() -> bool:
+	return _last_stand_left > 0.0
+
+## Seconds of it left, for a readout.
+func last_stand_left() -> float:
+	return _last_stand_left
+
 # -- Stun ---------------------------------------------------------------------
 
 ## Puts this fish out of action for `seconds`. The longest stun wins rather than
@@ -753,6 +999,12 @@ func stun(seconds: float) -> void:
 	# Whatever it was in the middle of, it is not any more.
 	_end_hang()
 	stunned.emit(_stun_left)
+
+## Whether this is a clone somebody left standing about. Fighters chase a decoy
+## because they were pointed at one; a coward has to ask, because it decides for
+## itself what to run from.
+func is_decoy() -> bool:
+	return _is_decoy
 
 func is_stunned() -> bool:
 	return _stun_left > 0.0
@@ -796,7 +1048,7 @@ func _tick_dot(delta: float) -> void:
 	while _dot_ticks > 0 and _dot_timer <= 0.0:
 		_dot_ticks -= 1
 		_dot_timer += interval
-		var dealt := take_tick_damage(_dot_damage, _dot_source, not _dot.is_magical())
+		var dealt := take_tick_damage(_dot_damage, _dot_source, kind_of(_dot))
 		if dealt > 0 and _dot_source != null and is_instance_valid(_dot_source):
 			_dot_source.report_indirect_damage(self, dealt)
 		# The tick that kills clears the effect on its way out - see
@@ -844,14 +1096,32 @@ func _tick_ready_spells() -> void:
 	if fish == null or not is_alive() or is_stunned() or _hang_left > 0.0:
 		return
 	for spell in fish.ready_spells(SpellData.Trigger.WHEN_READY):
-		var camera := spell.data as PaparazziSpellData
-		if camera == null:
+		if not _worth_casting(spell.data):
 			continue
 		if spell.try_cast_at(caster_power(spell.data)) == SpellInstance.NOT_READY:
 			continue
-		# No target: the camera goes off whether or not anybody is in the shot.
+		# No target: none of these are aimed at anybody in particular.
 		cast_spell.emit(spell.data, null)
+		_apply_when_ready(spell.data)
+
+## Whether a WHEN_READY spell has anything to do right now. Almost all of them
+## always have - the camera goes off whether or not there is anybody in the shot
+## - but a second clone while the first is still standing would be a wasted
+## cooldown, so that one waits.
+func _worth_casting(data: SpellData) -> bool:
+	if data is CloneSpellData:
+		return _clone == null
+	return data is PaparazziSpellData
+
+## What a WHEN_READY spell does once it has been paid for.
+func _apply_when_ready(data: SpellData) -> void:
+	var camera := data as PaparazziSpellData
+	if camera != null:
 		_flash(camera)
+		return
+	var clone := data as CloneSpellData
+	if clone != null:
+		_spawn_clone(clone)
 
 ## Sets a camera off in front of the fish and leaves standing anything it may
 ## hit that was caught in the cone - the closer it was, the longer for.
@@ -915,7 +1185,7 @@ func _tick_overhead() -> void:
 	if damage == SpellInstance.NOT_READY:
 		return
 	cast_spell.emit(spell.data, target)
-	var dealt := target.slam_down(damage, slam.slam_scale, self, not slam.is_magical())
+	var dealt := target.slam_down(damage, slam.slam_scale, self, kind_of(slam))
 	if dealt > 0:
 		dealt_damage.emit(target, dealt)
 
@@ -961,7 +1231,12 @@ func _tick_landing() -> void:
 ## rather than under it, like every other effect, so it stays where it was lit
 ## and outlives the fish that lit it.
 func _light_zone(spell: BurnZoneSpellData, damage: int) -> void:
-	var zone := SpellFireZone.light(_effect_parent(), global_position, spell, damage, self)
+	# On the floor, not at the middle of the fish: the marker shows the ground
+	# the zone covers, so it has to be on the ground. A resting fish sits half
+	# its drawn height above it.
+	var ground := global_position
+	ground.y -= _sprite_height(world_length()) * 0.5
+	var zone := SpellFireZone.light(_effect_parent(), ground, spell, damage, self)
 	if zone != null:
 		zone.hit_fish.connect(_on_bubble_hit)
 
@@ -1105,7 +1380,7 @@ func _explode(spell: ExplosionSpellData, origin: Vector3, damage: int) -> void:
 		if distance > spell.radius:
 			continue
 		var dealt := target.take_blast(damage, origin, spell.knockback_at(distance),
-			self, not spell.is_magical())
+			self, kind_of(spell))
 		if dealt > 0:
 			dealt_damage.emit(target, dealt)
 
@@ -1133,6 +1408,8 @@ func _on_fish_died() -> void:
 	_dead = true
 	_hit_cooldowns.clear()
 	_clear_dot()
+	_last_stand_left = 0.0
+	_end_clone()
 	# Frozen in mid-air firing bubbles when it died: let it drop.
 	_end_hang()
 	# It stops flopping and turns belly up - _sprite_roll() handles the turn -
