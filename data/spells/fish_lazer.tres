@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="LaserSpellData" format=3]
+
+[ext_resource type="Script" path="res://classes/spells/laser_spell_data.gd" id="1_lazr"]
+
+[resource]
+script = ExtResource("1_lazr")
+name = "Fish Lazer"
+description = "Plants itself, winds up with a great deal of glowing, and lets go of a beam. Everything standing in the line gets it, and it cannot change its mind once it has started."
+trigger = 5
+base_power = 0
+base_type = 4
+base_cooldown = 7
+charge_time = 0.7
+beam_time = 0.6
+interval = 0.15
+max_range = 6.0
+radius = 0.35
+damage_scale = 0.5
+tint = Color(0.55, 0.85, 1.0, 0.9)
+thickness = 0.22
+charge_tint = Color(0.6, 0.9, 1.0, 1.0)
