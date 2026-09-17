@@ -28,6 +28,7 @@ const C_WIN          := Color(0.95, 0.85, 0.40, 1.00)
 const C_DOT          := Color(0.72, 0.45, 0.85, 1.00)
 const C_STUN         := Color(1.00, 0.95, 0.55, 1.00)
 const C_ARMOUR       := Color(0.55, 0.75, 0.95, 1.00)
+const C_WARD         := Color(0.60, 0.55, 0.95, 1.00)
 const C_IMMUNE       := Color(0.85, 0.95, 1.00, 1.00)
 const C_CLOCK        := Color(0.62, 0.80, 0.56, 1.00)
 const C_SUDDEN       := Color(0.90, 0.35, 0.30, 1.00)
@@ -104,6 +105,9 @@ func _draw_card(at: Vector2, battler: BattleFish) -> void:
 	if battler.physical_reduction() > 0:
 		status_x = _draw_status(font, status_x, at.y + PAD + UIFont.CAP_H,
 			"ARM %d" % battler.physical_reduction(), C_ARMOUR)
+	if battler.magic_resistance() > 0.0:
+		status_x = _draw_status(font, status_x, at.y + PAD + UIFont.CAP_H,
+			"WARD %d" % roundi(battler.magic_resistance() * 100.0), C_WARD)
 	if battler.dot_ticks_left() > 0:
 		status_x = _draw_status(font, status_x, at.y + PAD + UIFont.CAP_H,
 			"DOT %dx%d" % [battler.dot_ticks_left(), battler.dot_damage()], C_DOT)

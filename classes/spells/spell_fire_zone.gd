@@ -110,9 +110,10 @@ func _burn() -> void:
 		offset.y = 0.0
 		if offset.length() > _spell.radius:
 			continue
-		# Physical: a burn that scales off how hard the fish hits is a burn
-		# armour can do something about. See BurnZoneSpellData.
-		var dealt := fish.take_tick_damage(_damage, source, not _spell.is_magical())
+		# Physical, because the spell is: a burn that scales off how hard the
+		# fish hits is a burn armour can do something about, and not one a ward
+		# turns aside. See BurnZoneSpellData.
+		var dealt := fish.take_tick_damage(_damage, source, BattleFish.kind_of(_spell))
 		if dealt > 0:
 			hit_fish.emit(fish, dealt)
 

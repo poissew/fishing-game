@@ -155,6 +155,33 @@ const KNOCKBACK_MAX_SPEED := 2.5
 ## fires at all. What keeps the floor out of it is the _grounded check, not this.
 const PEAK_RISE := 0.02
 
+## What kind of damage is arriving, which is what decides which of a fish's
+## defences gets a say in it.
+##
+## It was a plain "is this physical" bool until there was something that
+## defended against magic, at which point `false` turned out to mean three
+## different things: a spell, the arena's own clock, and Immunity collecting on
+## the blow it had been holding off. A ward that applied to all three would let
+## a fish sit out sudden death and survive its own last stand.
+enum DamageKind {
+	## A touch, or a PHYSICAL spell. ArmourSpellData takes the edge off it.
+	PHYSICAL,
+	## Any spell that is not PHYSICAL. WardSpellData turns a share of it aside.
+	MAGICAL,
+	## Neither, and nothing defends against it: the sudden-death drain, and the
+	## blow Immunity was holding off finally landing. A clock that armour could
+	## sit out would not be a clock.
+	UNTYPED,
+}
+
+## Which of those a spell deals, read off its own type. Static so that the
+## effects a spell leaves lying about - a bubble, a patch of fire - can ask
+## without holding a fish.
+static func kind_of(data: SpellData) -> DamageKind:
+	if data == null:
+		return DamageKind.UNTYPED
+	return DamageKind.MAGICAL if data.is_magical() else DamageKind.PHYSICAL
+
 ## Stands in for "this damage came from nowhere in particular". Damage carrying
 ## it leaves the fish where it stands instead of picking a direction on its own.
 const NO_ORIGIN := Vector3.INF
@@ -240,6 +267,8 @@ var _coward: CowardSpellData = null
 var _boxer: BoxerSpellData = null
 ## And its ArmourSpellData: the one that takes the edge off a punch.
 var _armour: ArmourSpellData = null
+## Its WardSpellData: the one that drinks a share of every spell.
+var _ward: WardSpellData = null
 ## And its LastStandSpellData: the one that refuses the killing blow, once.
 var _last_stand: LastStandSpellData = null
 
@@ -327,6 +356,7 @@ func _read_passives() -> void:
 	_coward = null
 	_boxer = null
 	_armour = null
+	_ward = null
 	_last_stand = null
 	if fish == null:
 		return
@@ -342,6 +372,9 @@ func _read_passives() -> void:
 		var armour := spell.data as ArmourSpellData
 		if armour != null:
 			_armour = armour
+		var ward := spell.data as WardSpellData
+		if ward != null:
+			_ward = ward
 		var last_stand := spell.data as LastStandSpellData
 		if last_stand != null:
 			_last_stand = last_stand
@@ -443,6 +476,12 @@ func physical_reduction() -> int:
 		return 0
 	return _armour.reduction(magic_dmg())
 
+## The share of every magical hit this fish never receives. 0.0 for anything
+## not carrying a ward. Unlike armour this is a proportion, so it scales with
+## the spell and can never take one to nothing.
+func magic_resistance() -> float:
+	return clampf(_ward.resistance, 0.0, 1.0) if _ward != null else 0.0
+
 ## The stat a spell of this type scales off, as this body reckons it. Every cast
 ## goes through here rather than reading the FishInstance, so a passive that
 ## rearranges what a fish's stats mean reaches its spells as well as its touches
@@ -462,7 +501,7 @@ func health_ratio() -> float:
 ## it, and the damage is physical, which is the kind armour is any use against.
 func take_damage(amount: int, from: BattleFish = null) -> int:
 	var origin := from.global_position if from != null and is_instance_valid(from) else NO_ORIGIN
-	return _apply_damage(amount, from, origin, 1.0, true)
+	return _apply_damage(amount, from, origin, 1.0, DamageKind.PHYSICAL)
 
 ## Drives this fish into the floor and takes health off it. The shove is
 ## straight down rather than away from anything, and the damage itself carries
@@ -472,10 +511,10 @@ func take_damage(amount: int, from: BattleFish = null) -> int:
 ## A fish already on the floor simply takes the damage: the impulse has nowhere
 ## to put it.
 func slam_down(amount: int, slam_scale: float, from: BattleFish = null,
-		physical := false) -> int:
+		kind := DamageKind.UNTYPED) -> int:
 	if not is_alive():
 		return 0
-	var dealt := _apply_damage(amount, from, NO_ORIGIN, 0.0, physical)
+	var dealt := _apply_damage(amount, from, NO_ORIGIN, 0.0, kind)
 	_shove(Vector3.DOWN, amount, slam_scale, 0.0)
 	return dealt
 
@@ -483,30 +522,34 @@ func slam_down(amount: int, slam_scale: float, from: BattleFish = null,
 ## something it is already under. `from` is still credited with it, so a health
 ## bar and a battle log can name whoever started it, but the fish is not shoved:
 ## there is no direction for a tick of damage to have come from.
-func take_tick_damage(amount: int, from: BattleFish = null, physical := false) -> int:
-	return _apply_damage(amount, from, NO_ORIGIN, 0.0, physical)
+func take_tick_damage(amount: int, from: BattleFish = null,
+		kind := DamageKind.UNTYPED) -> int:
+	return _apply_damage(amount, from, NO_ORIGIN, 0.0, kind)
 
 ## Damage from a point in the world rather than from a fish - a spell's blast.
 ## The shove is outwards from `origin`, so everything caught is thrown away from
 ## the explosion instead of away from whoever set it off, and `knockback_scale`
 ## is how much harder than a touch of the same size it throws.
 func take_blast(amount: int, origin: Vector3, knockback_scale: float = 1.0,
-		from: BattleFish = null, physical := false) -> int:
-	return _apply_damage(amount, from, origin, knockback_scale, physical)
+		from: BattleFish = null, kind := DamageKind.UNTYPED) -> int:
+	return _apply_damage(amount, from, origin, knockback_scale, kind)
 
 ## The one place health actually comes off. `origin` is what the fish is shoved
-## away from, NO_ORIGIN for damage that should not move it at all, and
-## `physical` says whether armour gets a say in it.
+## away from, NO_ORIGIN for damage that should not move it at all, and `kind`
+## says which of the fish's defences gets a say in it.
 func _apply_damage(amount: int, from: BattleFish, origin: Vector3,
-		knockback_scale: float, physical := false) -> int:
+		knockback_scale: float, kind := DamageKind.UNTYPED) -> int:
 	if not is_alive():
 		return 0
-	# Armour comes off what the hit is worth, never off what it shoves with: a
-	# sandbagged fish is harder to hurt, not harder to move, and one that shrugs
-	# a touch off entirely still gets knocked about by it.
+	# Taken off what the hit is worth, never off what it shoves with: a warded
+	# or sandbagged fish is harder to hurt, not harder to move, and one that
+	# shrugs a touch off entirely still gets knocked about by it.
 	var landed := amount
-	if physical:
-		landed = maxi(0, landed - physical_reduction())
+	match kind:
+		DamageKind.PHYSICAL:
+			landed = maxi(0, landed - physical_reduction())
+		DamageKind.MAGICAL:
+			landed = maxi(0, int(round(landed * (1.0 - magic_resistance()))))
 	# Immunity: the blow that would have finished it starts a stay of execution
 	# instead, and nothing gets through that last point while it runs.
 	landed = _refuse_killing_blow(landed)
@@ -1005,7 +1048,7 @@ func _tick_dot(delta: float) -> void:
 	while _dot_ticks > 0 and _dot_timer <= 0.0:
 		_dot_ticks -= 1
 		_dot_timer += interval
-		var dealt := take_tick_damage(_dot_damage, _dot_source, not _dot.is_magical())
+		var dealt := take_tick_damage(_dot_damage, _dot_source, kind_of(_dot))
 		if dealt > 0 and _dot_source != null and is_instance_valid(_dot_source):
 			_dot_source.report_indirect_damage(self, dealt)
 		# The tick that kills clears the effect on its way out - see
@@ -1142,7 +1185,7 @@ func _tick_overhead() -> void:
 	if damage == SpellInstance.NOT_READY:
 		return
 	cast_spell.emit(spell.data, target)
-	var dealt := target.slam_down(damage, slam.slam_scale, self, not slam.is_magical())
+	var dealt := target.slam_down(damage, slam.slam_scale, self, kind_of(slam))
 	if dealt > 0:
 		dealt_damage.emit(target, dealt)
 
@@ -1337,7 +1380,7 @@ func _explode(spell: ExplosionSpellData, origin: Vector3, damage: int) -> void:
 		if distance > spell.radius:
 			continue
 		var dealt := target.take_blast(damage, origin, spell.knockback_at(distance),
-			self, not spell.is_magical())
+			self, kind_of(spell))
 		if dealt > 0:
 			dealt_damage.emit(target, dealt)
 
