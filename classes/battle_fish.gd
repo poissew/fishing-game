@@ -245,6 +245,12 @@ var _last_stand: LastStandSpellData = null
 var _last_stand_left := 0.0
 var _last_stand_used := false
 
+## The clone this fish is hiding behind, how long it has left, and what every
+## fish it lured off was looking at before - so they can be given it back.
+var _clone: BattleFish = null
+var _clone_left := 0.0
+var _lured: Array = []
+
 ## The volley a spell left running: what there is still to fire, at what, and
 ## how long the fish hangs there before gravity gets it back.
 var _volley: BubbleSpellData = null
@@ -304,6 +310,7 @@ func bind_fish(fish_instance: FishInstance) -> void:
 	# A fish sent into the arena again gets its refusal back with its health.
 	_last_stand_left = 0.0
 	_last_stand_used = false
+	_end_clone()
 	_read_passives()
 	# bind_fish() is usually called before the body is in the tree, so the
 	# @onready nodes are not there yet - _ready() picks the work back up.
@@ -556,6 +563,7 @@ func can_hit(other: BattleFish) -> bool:
 func _physics_process(delta: float) -> void:
 	_tick_hit_cooldowns(delta)
 	_tick_last_stand(delta)
+	_tick_clone(delta)
 	_tick_stun(delta)
 	_tick_dot(delta)
 	if fish != null and is_alive():
@@ -780,6 +788,95 @@ func _apply_on_hit(data: SpellData, other: BattleFish, damage: int) -> void:
 	if dot != null and other != null and is_instance_valid(other):
 		other.apply_dot(dot, damage, self)
 
+# -- Clone --------------------------------------------------------------------
+
+## Puts a copy of this fish on the floor beside it and points everything that
+## was fighting it at the copy instead.
+##
+## The copy is a real battler, so it flops and collides and can be hit, and it
+## is deliberately **not** added to whatever the arena handed `BattleRound` -
+## nothing that cannot win a round should be able to hold one open.
+func _spawn_clone(spell: CloneSpellData) -> void:
+	if fish == null or fish.data == null or _clone != null:
+		return
+	var copy := fish.duplicate() as FishInstance
+	if copy == null:
+		return
+	# Everything that makes a fish dangerous, taken out: it is scenery that
+	# happens to look exactly like the fish it came off.
+	copy.phys_dmg = 0
+	copy.magic_dmg = 0
+	copy.spells = [] as Array[SpellInstance]
+	copy.health = maxi(1, int(round(fish.health * spell.health_scale)))
+	var decoy := BattleFish.spawn(copy)
+	if decoy == null:
+		return
+	# Its own team, so it never fights back and this fish never turns on it.
+	decoy.team = team
+	decoy.tint = tint
+	# It wanders: a decoy that made straight for the enemy would give itself up.
+	decoy.chase_bias = 0.0
+	_effect_parent().add_child(decoy)
+	decoy.global_position = global_position + _random_horizontal() * spell.spawn_offset
+	_clone = decoy
+	_clone_left = maxf(spell.duration, 0.01)
+	# The clone keeps its own clock as well as this one, because this one dies
+	# with the fish: an arena that frees a battler mid-round - the way a
+	# rematch does - would otherwise leave the decoy standing there for good,
+	# with nothing left alive that knows to take it away. The timer belongs to
+	# the tree and Godot drops the connection if the clone goes first.
+	get_tree().create_timer(_clone_left).timeout.connect(decoy.queue_free)
+	_lure_enemies()
+
+## Points everything that could be fighting this fish at the clone, keeping what
+## each of them was looking at so it can be handed back.
+func _lure_enemies() -> void:
+	_lured.clear()
+	if _clone == null:
+		return
+	for node in get_tree().get_nodes_in_group(GROUP):
+		var other := node as BattleFish
+		# can_hit(self) asks it the one question that matters: is this fish
+		# something you would fight?
+		if other == null or other == _clone or not other.can_hit(self):
+			continue
+		_lured.append([other, other.chase_target])
+		other.chase_target = _clone
+
+## Counts the clone down, and takes it away early if it is killed or if the fish
+## it came off dies first.
+func _tick_clone(delta: float) -> void:
+	if _clone_left <= 0.0:
+		return
+	if not is_instance_valid(_clone) or not _clone.is_alive() or not is_alive():
+		_end_clone()
+		return
+	_clone_left = maxf(0.0, _clone_left - delta)
+	if _clone_left <= 0.0:
+		_end_clone()
+
+## Takes the clone away and gives everything it lured off its own target back -
+## but only if that is still the clone, so an arena that has since repointed a
+## fish somewhere else keeps its say.
+func _end_clone() -> void:
+	var clone := _clone
+	_clone = null
+	_clone_left = 0.0
+	var clone_valid := is_instance_valid(clone)
+	for pair in _lured:
+		var other := pair[0] as BattleFish
+		if not is_instance_valid(other):
+			continue
+		# Something else has pointed it somewhere since: leave that alone.
+		if clone_valid and other.chase_target != clone:
+			continue
+		# And never hand back a target that has itself been freed in the
+		# meantime - that is a round being torn down around us.
+		other.chase_target = pair[1] if is_instance_valid(pair[1]) else null
+	_lured.clear()
+	if clone_valid:
+		clone.queue_free()
+
 # -- Last stand ---------------------------------------------------------------
 
 ## Caps `amount` at whatever would leave the fish on one point of health, when
@@ -926,14 +1023,32 @@ func _tick_ready_spells() -> void:
 	if fish == null or not is_alive() or is_stunned() or _hang_left > 0.0:
 		return
 	for spell in fish.ready_spells(SpellData.Trigger.WHEN_READY):
-		var camera := spell.data as PaparazziSpellData
-		if camera == null:
+		if not _worth_casting(spell.data):
 			continue
 		if spell.try_cast_at(caster_power(spell.data)) == SpellInstance.NOT_READY:
 			continue
-		# No target: the camera goes off whether or not anybody is in the shot.
+		# No target: none of these are aimed at anybody in particular.
 		cast_spell.emit(spell.data, null)
+		_apply_when_ready(spell.data)
+
+## Whether a WHEN_READY spell has anything to do right now. Almost all of them
+## always have - the camera goes off whether or not there is anybody in the shot
+## - but a second clone while the first is still standing would be a wasted
+## cooldown, so that one waits.
+func _worth_casting(data: SpellData) -> bool:
+	if data is CloneSpellData:
+		return _clone == null
+	return data is PaparazziSpellData
+
+## What a WHEN_READY spell does once it has been paid for.
+func _apply_when_ready(data: SpellData) -> void:
+	var camera := data as PaparazziSpellData
+	if camera != null:
 		_flash(camera)
+		return
+	var clone := data as CloneSpellData
+	if clone != null:
+		_spawn_clone(clone)
 
 ## Sets a camera off in front of the fish and leaves standing anything it may
 ## hit that was caught in the cone - the closer it was, the longer for.
@@ -1216,6 +1331,7 @@ func _on_fish_died() -> void:
 	_hit_cooldowns.clear()
 	_clear_dot()
 	_last_stand_left = 0.0
+	_end_clone()
 	# Frozen in mid-air firing bubbles when it died: let it drop.
 	_end_hang()
 	# It stops flopping and turns belly up - _sprite_roll() handles the turn -
