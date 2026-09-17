@@ -64,6 +64,9 @@ const MAX_LEN  := 2.20
 ## worth speaking of.
 const MIN_RADIUS := 0.03
 
+## How much of a spell's own charge colour is mixed into a fish winding one up.
+const CHARGE_TINT_MIX := 0.70
+
 ## Tint a fish on its last legs is washed out towards, and how much of it is
 ## mixed in. Paler than the stun, and it beats the stun when a fish is somehow
 ## both: being about to die is the more urgent news.
@@ -283,6 +286,16 @@ var _last_stand_used := false
 var _clone: BattleFish = null
 var _clone_left := 0.0
 var _lured: Array = []
+
+## The beam this fish is winding up or firing: the spell, what is left of the
+## whole charge-and-fire, whether the beam is actually on yet, the time to its
+## next tick, and the direction it was aimed in - locked when the charge began
+## and never corrected.
+var _beam: LaserSpellData = null
+var _beam_left := 0.0
+var _beam_firing := false
+var _beam_tick := 0.0
+var _beam_dir := Vector3.RIGHT
 
 ## The volley a spell left running: what there is still to fire, at what, and
 ## how long the fish hangs there before gravity gets it back.
@@ -616,6 +629,7 @@ func _physics_process(delta: float) -> void:
 	if fish != null and is_alive():
 		fish.tick_spells(delta)
 	_tick_volley(delta)
+	_tick_beam(delta)
 	_tick_flop(delta)
 	_tick_peak()
 	_tick_landing()
@@ -739,6 +753,10 @@ func _tick_look(delta: float) -> void:
 	if _flash_left > 0.0:
 		_flash_left = maxf(0.0, _flash_left - delta)
 		_sprite.modulate = tint.lerp(HIT_COLOR, _flash_left / HIT_FLASH)
+	elif is_charging():
+		# Lit up and going nowhere: a fish that stands still for no visible
+		# reason reads as a broken fish.
+		_sprite.modulate = tint.lerp(_beam.charge_tint, CHARGE_TINT_MIX)
 	elif is_in_last_stand():
 		# Gone pale, and ahead of the stun: a fish about to die reads as that
 		# first and as dazzled second.
@@ -845,6 +863,103 @@ func _apply_on_hit(data: SpellData, other: BattleFish, damage: int) -> void:
 	# needs_hit is what guarantees there is an `other` here at all.
 	if dot != null and other != null and is_instance_valid(other):
 		other.apply_dot(dot, damage, self)
+
+# -- Beam ---------------------------------------------------------------------
+
+## The nearest fish this one may hit that is inside `reach`, or null.
+func _target_in_range(reach: float) -> BattleFish:
+	var nearest := _nearest_enemy()
+	if nearest == null:
+		return null
+	var offset := nearest.global_position - global_position
+	offset.y = 0.0
+	return nearest if offset.length() <= reach else null
+
+## Plants the fish and starts it winding up. The aim is taken now and kept: a
+## beam that followed its target around would be one nothing could dodge, and
+## dodging it is the only answer to a fish that has stopped moving to charge it.
+func _start_beam(spell: LaserSpellData) -> void:
+	var target := _target_in_range(spell.max_range)
+	if target == null:
+		return
+	var aim := target.global_position - global_position
+	aim.y = 0.0
+	if aim.is_zero_approx():
+		return
+	_beam = spell
+	_beam_dir = aim.normalized()
+	_beam_left = spell.total_time()
+	_beam_firing = false
+	_beam_tick = 0.0
+	# The same timer the bubble volley uses: whatever holds the fish, holds it.
+	_hang_left = _beam_left
+	linear_velocity = Vector3.ZERO
+	angular_velocity = Vector3.ZERO
+	freeze = true
+
+## Winds the charge down, then runs the beam out. Nothing at all happens until
+## the charge is spent, which is the whole cost of the spell.
+func _tick_beam(delta: float) -> void:
+	if _beam == null:
+		return
+	if not is_alive():
+		_end_hang()
+		return
+	_beam_left = maxf(0.0, _beam_left - delta)
+	if _beam_left <= 0.0:
+		_end_hang()
+		return
+	if _beam_left > _beam.beam_time:
+		return
+
+	# The moment the charge runs out: the light goes on, once.
+	if not _beam_firing:
+		_beam_firing = true
+		_beam_tick = 0.0
+		SpellBeam.fire(_effect_parent(), global_position, _beam_dir,
+			_beam.max_range, _beam)
+	_beam_tick -= delta
+	if _beam_tick > 0.0:
+		return
+	_beam_tick += maxf(_beam.interval, 0.01)
+	_burn_the_line()
+
+## One tick of the beam: everything this fish may hit that is standing in the
+## line takes it, and it does not stop at the first of them.
+func _burn_the_line() -> void:
+	var spell := _beam
+	if spell == null:
+		return
+	var origin := global_position
+	var damage := spell.compute_damage(caster_power(spell))
+	for node in get_tree().get_nodes_in_group(GROUP):
+		var other := node as BattleFish
+		if other == null or not can_hit(other):
+			continue
+		var offset := other.global_position - origin
+		offset.y = 0.0
+		var along := offset.dot(_beam_dir)
+		if along < 0.0 or along > spell.max_range:
+			continue
+		# How far off the line it is, against the beam's half-width plus a share
+		# of the fish's own length: a shark is a wider thing to miss.
+		var across := (offset - _beam_dir * along).length()
+		if across > spell.radius + other.world_length() * 0.3:
+			continue
+		# No shove at all - a beam that knocked its target aside would blow it
+		# out of its own line after the first tick, and the other three would
+		# hit nothing.
+		var dealt := other.take_blast(damage, origin, 0.0, self, kind_of(spell))
+		if dealt > 0:
+			dealt_damage.emit(other, dealt)
+
+## Whether the fish is standing there winding one up rather than firing it.
+func is_charging() -> bool:
+	return _beam != null and not _beam_firing
+
+## Seconds left of the whole charge-and-fire, for a readout.
+func beam_left() -> float:
+	return _beam_left
 
 # -- Clone --------------------------------------------------------------------
 
@@ -1111,6 +1226,12 @@ func _tick_ready_spells() -> void:
 func _worth_casting(data: SpellData) -> bool:
 	if data is CloneSpellData:
 		return _clone == null
+	var laser := data as LaserSpellData
+	if laser != null:
+		# Aimed, unlike the camera: firing it at an empty arena would spend the
+		# cooldown on nothing, and it cannot be started while something else is
+		# already holding the fish still.
+		return _hang_left <= 0.0 and _target_in_range(laser.max_range) != null
 	return data is PaparazziSpellData
 
 ## What a WHEN_READY spell does once it has been paid for.
@@ -1122,6 +1243,10 @@ func _apply_when_ready(data: SpellData) -> void:
 	var clone := data as CloneSpellData
 	if clone != null:
 		_spawn_clone(clone)
+		return
+	var laser := data as LaserSpellData
+	if laser != null:
+		_start_beam(laser)
 
 ## Sets a camera off in front of the fish and leaves standing anything it may
 ## hit that was caught in the cone - the closer it was, the longer for.
@@ -1282,9 +1407,11 @@ func _start_volley(spell: BubbleSpellData, damage: int, target: BattleFish) -> v
 ## fish let go again once `hang_time` is up. A fish that dies in mid-volley
 ## drops the rest of it and falls.
 func _tick_volley(delta: float) -> void:
-	if _hang_left <= 0.0:
+	# The volley's own hang, not anybody else's: a beam holds the fish with the
+	# same timer, and this would otherwise call that one off on its first frame.
+	if _volley == null or _hang_left <= 0.0:
 		return
-	if not is_alive() or _volley == null:
+	if not is_alive():
 		_end_hang()
 		return
 	_hang_left = maxf(0.0, _hang_left - delta)
@@ -1298,12 +1425,16 @@ func _tick_volley(delta: float) -> void:
 	if _hang_left <= 0.0:
 		_end_hang()
 
-## Hands the fish back to gravity and drops whatever was left of the volley.
+## Hands the fish back to gravity and drops whatever it was in the middle of -
+## a volley, a beam - whichever was holding it.
 func _end_hang() -> void:
 	_hang_left = 0.0
 	_volley = null
 	_volley_target = null
 	_volley_shots = 0
+	_beam = null
+	_beam_left = 0.0
+	_beam_firing = false
 	if freeze:
 		freeze = false
 
