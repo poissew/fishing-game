@@ -2,10 +2,12 @@
 
 [ext_resource type="Script" uid="uid://cpsvvqv4iu7sg" path="res://classes/spells/explosion_spell_data.gd" id="1_expl"]
 [ext_resource type="SpriteFrames" uid="uid://cmvxh4wegm7xa" path="res://sprites/spells/explosion.tres" id="2_expl"]
+[ext_resource type="AudioStream" uid="uid://bwwd4xq2l0ddx" path="res://audio/sfx/snd_badexplosion.wav" id="3_8886n"]
 
 [resource]
 script = ExtResource("1_expl")
 frames = ExtResource("2_expl")
+sfx = ExtResource("3_8886n")
 name = "Detonate"
 description = "Primed. The next thing this one runs into goes up with it, and everything close enough - itself included - is thrown clear."
 trigger = 1

@@ -1603,6 +1603,7 @@ func _recoil_direction(origin: Vector3) -> Vector3:
 func _explode(spell: ExplosionSpellData, origin: Vector3, damage: int) -> void:
 	SpellExplosion.burst(_effect_parent(), origin, spell)
 	_recoil(spell, origin, damage)
+	audio.play_sfx_at(spell.sfx, origin)
 	for node in get_tree().get_nodes_in_group(GROUP):
 		var target := node as BattleFish
 		if target == null or not can_hit(target):
