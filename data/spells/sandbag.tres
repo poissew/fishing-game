@@ -4,7 +4,8 @@
 
 [resource]
 script = ExtResource("1_sand")
-flat = 2.0
+flat = 1.0
+per_power = 0.2
 name = "Sandbag"
 description = "Takes a punch the way a sack of sand does. Anything thrown at this one lands a good deal softer than it was thrown."
 trigger = 3

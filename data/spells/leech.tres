@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="LeechSpellData" format=3]
+
+[ext_resource type="Script" path="res://classes/spells/leech_spell_data.gd" id="1_leech"]
+
+[resource]
+script = ExtResource("1_leech")
+name = "Leech"
+description = "Leaves leeches on the floor wherever it lands. Anything that stands on one wears it for a while, and what the leech drinks goes back into the fish that dropped it."
+trigger = 6
+base_power = 0
+base_type = 5
+base_cooldown = 4
+max_stacks = 3
+life = 10.0
+duration = 5.0
+interval = 0.5
+damage_scale = 0.2
+heal_share = 0.5
+radius = 0.45
+height = 0.6
+tint = Color(0.45, 0.1, 0.18, 1)
+fed_tint = Color(0.85, 0.15, 0.25, 1)
+leech_size = 0.3

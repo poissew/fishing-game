@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="LightningSpellData" format=3 uid="uid://g2ie6nk4y5v1"]
+
+[ext_resource type="Script" uid="uid://dfsi21tdb6gyg" path="res://classes/spells/lightning_spell_data.gd" id="1_lgtn"]
+
+[resource]
+script = ExtResource("1_lgtn")
+damage_scale = 0.4
+name = "Lightning"
+description = "Calls a bolt down on wherever the enemy is standing. It takes a second to arrive and it lands where it was aimed, not where the fish has got to since."
+trigger = 5
+base_type = 4
+base_cooldown = 4
