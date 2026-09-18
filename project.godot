@@ -11,7 +11,7 @@ config_version=5
 [application]
 
 config/name="fishing-game"
-run/main_scene="uid://crf5qhlis35is"
+run/main_scene="uid://dp6ot5rec32nh"
 config/features=PackedStringArray("4.7", "GL Compatibility")
 config/icon="res://icon.svg"
 
