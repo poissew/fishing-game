@@ -33,7 +33,12 @@ extends SpellData
 ## arena's floor is 8 by 5, so this covers the whole of it.
 @export_range(0.5, 40.0, 0.5, "suffix:m") var max_range: float = 12.0
 ## Damage as a share of the caster's magic damage, on top of base_power.
-@export var damage_scale: float = 0.8
+##
+## Low, and deliberately: this is the one damaging spell that costs its caster
+## nothing at all - no contact, no standing still, no aim. At 0.8 it went 25-5
+## over 30 rounds against a fish with no spells, which is the strongest thing in
+## the pool; at 0.4 it is 15-6, against a harness that runs 15-10 on its own.
+@export var damage_scale: float = 0.4
 ## How much harder than a touch the bolt throws what it hits. The mark is under
 ## the fish, so this mostly means "off its feet" rather than any direction.
 @export_range(0.0, 4.0, 0.1) var knockback_scale: float = 1.0
