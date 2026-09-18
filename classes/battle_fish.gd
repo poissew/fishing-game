@@ -446,6 +446,13 @@ func world_length() -> float:
 		return BASE_LEN
 	return clampf(BASE_LEN * sqrt(fish.size), MIN_LEN, MAX_LEN)
 
+## The floor under this fish: where anything that belongs on the ground rather
+## than on the fish goes. A resting fish sits half its drawn height above it.
+func ground_position() -> Vector3:
+	var ground := global_position
+	ground.y -= _sprite_height(world_length()) * 0.5
+	return ground
+
 # -- Stats --------------------------------------------------------------------
 
 ## Damage this fish deals on contact, once its passives have had their say: a
@@ -961,6 +968,26 @@ func is_charging() -> bool:
 func beam_left() -> float:
 	return _beam_left
 
+# -- Lightning ----------------------------------------------------------------
+
+## Puts a bolt on its way down onto every fish this one may hit that is within
+## reach. The mark goes where each of them is standing **now** and stays there;
+## what happens in the second it takes to arrive is the target's business, which
+## is the whole of the spell.
+func _call_lightning(spell: LightningSpellData, damage: int) -> void:
+	for node in get_tree().get_nodes_in_group(GROUP):
+		var other := node as BattleFish
+		if other == null or not can_hit(other):
+			continue
+		var offset := other.global_position - global_position
+		offset.y = 0.0
+		if offset.length() > spell.max_range:
+			continue
+		var strike := SpellStrike.call_down(_effect_parent(),
+			other.ground_position(), spell, damage, self)
+		if strike != null:
+			strike.hit_fish.connect(_on_bubble_hit)
+
 # -- Clone --------------------------------------------------------------------
 
 ## Puts a copy of this fish on the floor beside it and points everything that
@@ -1213,11 +1240,12 @@ func _tick_ready_spells() -> void:
 	for spell in fish.ready_spells(SpellData.Trigger.WHEN_READY):
 		if not _worth_casting(spell.data):
 			continue
-		if spell.try_cast_at(caster_power(spell.data)) == SpellInstance.NOT_READY:
+		var damage := spell.try_cast_at(caster_power(spell.data))
+		if damage == SpellInstance.NOT_READY:
 			continue
-		# No target: none of these are aimed at anybody in particular.
+		# No target: none of these are aimed at one fish in particular.
 		cast_spell.emit(spell.data, null)
-		_apply_when_ready(spell.data)
+		_apply_when_ready(spell.data, damage)
 
 ## Whether a WHEN_READY spell has anything to do right now. Almost all of them
 ## always have - the camera goes off whether or not there is anybody in the shot
@@ -1232,10 +1260,15 @@ func _worth_casting(data: SpellData) -> bool:
 		# cooldown on nothing, and it cannot be started while something else is
 		# already holding the fish still.
 		return _hang_left <= 0.0 and _target_in_range(laser.max_range) != null
+	var storm := data as LightningSpellData
+	if storm != null:
+		# Nothing in reach, nothing to mark: the sky would be struck for free.
+		return _target_in_range(storm.max_range) != null
 	return data is PaparazziSpellData
 
-## What a WHEN_READY spell does once it has been paid for.
-func _apply_when_ready(data: SpellData) -> void:
+## What a WHEN_READY spell does once it has been paid for. `damage` is what the
+## cast rolled - most of these do none, and the laser rolls its own per tick.
+func _apply_when_ready(data: SpellData, damage: int) -> void:
 	var camera := data as PaparazziSpellData
 	if camera != null:
 		_flash(camera)
@@ -1247,6 +1280,10 @@ func _apply_when_ready(data: SpellData) -> void:
 	var laser := data as LaserSpellData
 	if laser != null:
 		_start_beam(laser)
+		return
+	var storm := data as LightningSpellData
+	if storm != null:
+		_call_lightning(storm, damage)
 
 ## Sets a camera off in front of the fish and leaves standing anything it may
 ## hit that was caught in the cone - the closer it was, the longer for.
@@ -1357,11 +1394,9 @@ func _tick_landing() -> void:
 ## and outlives the fish that lit it.
 func _light_zone(spell: BurnZoneSpellData, damage: int) -> void:
 	# On the floor, not at the middle of the fish: the marker shows the ground
-	# the zone covers, so it has to be on the ground. A resting fish sits half
-	# its drawn height above it.
-	var ground := global_position
-	ground.y -= _sprite_height(world_length()) * 0.5
-	var zone := SpellFireZone.light(_effect_parent(), ground, spell, damage, self)
+	# the zone covers, so it has to be on the ground.
+	var zone := SpellFireZone.light(_effect_parent(), ground_position(), spell,
+		damage, self)
 	if zone != null:
 		zone.hit_fish.connect(_on_bubble_hit)
 
