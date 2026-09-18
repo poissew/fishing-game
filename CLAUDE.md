@@ -14,7 +14,7 @@ Open the project in the Godot 4.6 editor and press **F5** (Run Project) or use t
 
 ### Autoloads (global singletons)
 
-Six autoloaded nodes are accessible from any script by name:
+Seven autoloaded nodes are accessible from any script by name:
 
 | Name | File | Purpose |
 |------|------|---------|
@@ -24,6 +24,7 @@ Six autoloaded nodes are accessible from any script by name:
 | `options` | `options.gd` | Global settings (e.g. `options.MOUSE_SENS`) |
 | `daynight` | `autoload/day_night.gd` | Day/night clock. `daynight.is_night()`, `hour_of_day()`, `time_string()`, signals `phase_changed` / `hour_passed` / `day_passed` |
 | `gamephase` | `autoload/game_phase.gd` | Which half of the round the game is in: `is_fishing()` / `is_selecting()` / `is_battling()`, signals `phase_changed` / `selection_started` / `battle_started` / `battle_ended` |
+| `audio` | `autoload/audio.gd` | Every sound in the game: `play_sfx()`, `play_sfx_at()`, `play_music()`, `play_soundscape()`, and the mixer through `set_volume(audio.Bus.X, linear)` |
 
 ### Data / Resource hierarchy
 
@@ -227,6 +228,21 @@ FISHING  ──day runs out──>  SELECTION  ──fish picked──>  BATTLE 
 - **New spells**: a `SpellData` resource in `data/spells/`, added to `FishData.SPELL_POOL` — the stand-in registry every fish rolls from, until there are enough spells to be worth a `Spellsdb` autoload keyed by id the way `Itemdb` does it for items. A spell that needs behaviour rather than a number subclasses `SpellData` and gets a branch in whichever of `BattleFish._apply_on_hit()` / `_cast_at_peak()` matches its trigger, or in `_read_passives()` if it is never cast; a new *trigger* means a new enum entry (**appended**, see above) and a new place in BattleFish that spots the moment. A passive that changes what a stat is worth belongs in `phys_dmg()` / `magic_dmg()`, where both touches and spells will see it. Nothing else in the game needs to know any of it exists.
 - `FishData.roll_spells()` draws 0..`max_spells` of them without replacement, so a fish never carries the same spell twice and a pool smaller than `max_spells` caps the count on its own. `UIFishSelect` and `UIBattle` show the count as SPL.
 
+### Audio
+
+- `audio` (`autoload/audio.gd`) is the only thing in the game that plays a sound. Like `daynight` and `gamephase` it owns no scene and knows nothing about the game — it is asked to play things and never goes looking for them.
+- **Each kind of sound is on its own mixer bus, which is the whole point of the split.** `audio.Bus` is `MASTER / MUSIC / SOUNDSCAPE / SFX / UI`, and `BUS_NAMES` maps each to a bus in `default_bus_layout.tres` (all four feeding Master). An options screen moves one with `audio.set_volume(audio.Bus.MUSIC, 0.4)` — linear 0..1, because that is what a slider has — and never needs to know what is currently playing.
+- `get_volume()` gives back the number `set_volume()` was handed rather than one round-tripped through decibels, so a slider reads back what it wrote. `volumes()` / `apply_volumes()` are the pair to save and restore the lot; nothing calls them yet, and `options.gd` is where that would go.
+- **A bus missing from the layout falls back to Master** rather than erroring: `_resolve_buses()` resolves every name once at `_ready()` and warns. Adding a mixer track means a bus in the layout *and* an entry in `Bus` + `BUS_NAMES` — the enum is read by name, not by index, so unlike `SpellData.Trigger` it is safe to insert into.
+- **SFX** are one-shots off a pool of `AudioStreamPlayer`s (`VOICES`, growing to `MAX_VOICES` and then stealing the oldest — a sound cut short beats an allocation mid-fight). `play_sfx()` is flat, `play_sfx_at()` places one in the world, `play_sfx_on()` parents it to a node so it follows what made it. The world-placed ones are built per call and free themselves on `finished`, so **a stream handed to them must not loop**. `jitter` is how far the pitch may wander either side of 1.0, which is what stops a sound repeated twice a second turning into a machine; it rolls on `randomizer.RNG` like everything else.
+- `play_sfx_at()` parents to the manager itself, which works because **every `SubViewport` in the game shares the root's `World3D`** (none sets `own_world_3d`) — the listener is the camera inside the 480x270 viewport, and the audio is in the same world. A scene that gives its viewport a world of its own has to call `bind_world()`.
+- **Music** is one track at a time across two players, crossfaded (`MUSIC_FADE`, 1.5 s). Asking for the track already playing does nothing, so a scene can call `play_music()` every time it is entered; a null stream is `stop_music()`.
+- **Soundscapes are layers, not a track**: `play_soundscape(&"water", stream)` fades one in under an id and any number run at once, so water, wind and an arena crowd are three calls. Asking again for a layer already playing only moves its level, so ambience can be told to get quieter without being restarted. `SOUNDSCAPE_FADE` is longer than the music's — nobody is supposed to notice ambience change.
+- **Looping is handled whichever kind of stream turns up.** A stream that loops by its import settings never fires `finished`; one that does not is started again in `_on_finished()`, which is what the `looping` meta marks. `_end()` takes that flag off *before* stopping a player, or a layer being faded out would start itself straight back up.
+- `_fade()` is the one place volume moves, and it kills the player's previous tween first — a layer told to go quiet while it is still fading in would otherwise have two tweens arguing over `volume_db`. Fades end at `SILENT_DB` (−60) rather than `linear_to_db(0)`, which is −inf and not something to hand a tween.
+- The manager is `PROCESS_MODE_ALWAYS`: sound carries on while the tree is paused, because a pause menu with silence behind it sounds like a crash.
+- **There is no audio in the project yet** — no `.ogg`/`.wav` anywhere, so nothing calls any of this. Wiring a sound up is a `preload()` and one call at the site that already knows the thing happened (`Bobber` on the bite, `BattleFish._hit()`, `UIShop` on a sale).
+
 ### Day/night cycle
 
 - One cycle is **20 real minutes**: `DAY_LENGTH` 600 s of daylight (06:00 → 18:00) then `NIGHT_LENGTH` 600 s of night (18:00 → 06:00). Time runs uniformly, so one in-game hour is 50 real seconds.
@@ -300,5 +316,6 @@ FISHING  ──day runs out──>  SELECTION  ──fish picked──>  BATTLE 
 - All text is monogram at `UIFont.SIZE` (or a whole multiple of it) — see **Text**.
 - Runtime state lives in `*Instance` **Resources** that wrap a `data` reference.
 - All random rolls go through `randomizer.RNG` (the shared, pre-seeded `RandomNumberGenerator`).
+- All sound goes through the `audio` autoload — no `AudioStreamPlayer` nodes dropped into scenes, or the player's volume sliders will not reach them. See **Audio**.
 - Water biome is determined by `Area3D` groups on the water body; the `Bobber` reads those groups on entry.
 - New fish species: create a `FishData` resource (`.tres`), add a `LootEntry` referencing it to the appropriate `LootTable`, and register it in `Itemdb` if it needs to be retrievable by ID.
