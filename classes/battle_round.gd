@@ -26,7 +26,7 @@ signal finished(winner: BattleFish)
 
 @export_category("Round")
 ## Seconds of ordinary fighting before sudden death starts.
-@export_range(5.0, 600.0, 1.0, "suffix:s") var duration: float = 60.0
+@export_range(5.0, 600.0, 1.0, "suffix:s") var duration: float = 45.0
 
 @export_category("Sudden death")
 ## Seconds between two turns of the screws.

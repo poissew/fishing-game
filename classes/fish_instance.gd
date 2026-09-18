@@ -110,13 +110,13 @@ func create_fish_instance(fish_data: FishData) -> FishInstance:
 	fish.roll_fighting_data()
 	return fish
 
-## Rolls the fighting stats. Physical damage depends on what the catch is worth
-## and health on its size, so this must run after size/weight/quality are set.
+## Rolls the fighting stats. Both damage and health come off the fish's real
+## length, so this must run after size is set.
 func roll_fighting_data() -> void:
 	var fish_data := data as FishData
 	if fish_data == null:
 		return
-	phys_dmg = fish_data.roll_phys_dmg(get_value())
+	phys_dmg = fish_data.roll_phys_dmg(size)
 	magic_dmg = fish_data.roll_magic_dmg()
 	health = fish_data.roll_health(size)
 	current_health = health
