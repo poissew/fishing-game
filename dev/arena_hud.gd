@@ -30,6 +30,7 @@ const C_STUN         := Color(1.00, 0.95, 0.55, 1.00)
 const C_ARMOUR       := Color(0.55, 0.75, 0.95, 1.00)
 const C_WARD         := Color(0.60, 0.55, 0.95, 1.00)
 const C_IMMUNE       := Color(0.85, 0.95, 1.00, 1.00)
+const C_LEECH        := Color(0.90, 0.35, 0.45, 1.00)
 const C_CLOCK        := Color(0.62, 0.80, 0.56, 1.00)
 const C_SUDDEN       := Color(0.90, 0.35, 0.30, 1.00)
 
@@ -117,6 +118,11 @@ func _draw_card(at: Vector2, battler: BattleFish) -> void:
 	if battler.is_in_last_stand():
 		status_x = _draw_status(font, status_x, at.y + PAD + UIFont.CAP_H,
 			"IMMUNE %.1f" % battler.last_stand_left(), C_IMMUNE)
+	if battler.leech_count() > 0:
+		# How many this fish has out, not how many are on it: a leech belongs to
+		# whoever dropped it for as long as it lives.
+		status_x = _draw_status(font, status_x, at.y + PAD + UIFont.CAP_H,
+			"LEECH %d" % battler.leech_count(), C_LEECH)
 	draw_string(font, Vector2(left, at.y + PAD + LINE_H + UIFont.CAP_H),
 		"%.2fm  PHYS %d  MAG %d" % [fish.size, battler.phys_dmg(), battler.magic_dmg()],
 		HORIZONTAL_ALIGNMENT_LEFT, -1, UIFont.SIZE, C_STAT)

@@ -195,6 +195,10 @@ signal dealt_damage(target: BattleFish, amount: int)
 ## Fired when this fish loses health. `from` is the fish that did it, or null
 ## for damage that came from somewhere else.
 signal took_damage(amount: int, from: BattleFish)
+
+## Fired when health goes back on, with what was actually put back. Only Leech
+## does this - nothing else in the arena gives any.
+signal healed(amount: int)
 ## Fired when the blow that would have killed this fish is held off instead,
 ## with how long it has left on its feet.
 signal last_stand_started(seconds: float)
@@ -297,6 +301,10 @@ var _beam_firing := false
 var _beam_tick := 0.0
 var _beam_dir := Vector3.RIGHT
 
+## The leeches this fish has dropped that are still about, waiting or attached.
+## Counted against LeechSpellData.max_stacks, and pruned as it counts.
+var _leeches: Array[SpellLeech] = []
+
 ## The volley a spell left running: what there is still to fire, at what, and
 ## how long the fish hangs there before gravity gets it back.
 var _volley: BubbleSpellData = null
@@ -356,6 +364,7 @@ func bind_fish(fish_instance: FishInstance) -> void:
 	# A fish sent into the arena again gets its refusal back with its health.
 	_last_stand_left = 0.0
 	_last_stand_used = false
+	_leeches.clear()
 	_end_clone()
 	_read_passives()
 	# bind_fish() is usually called before the body is in the tree, so the
@@ -515,6 +524,19 @@ func is_alive() -> bool:
 ## 0.0 dead, 1.0 untouched. For a health bar over the fish.
 func health_ratio() -> float:
 	return fish.health_ratio() if fish != null else 0.0
+
+## Puts health back, and returns what actually went back on. Deliberately
+## narrow, because Leech is the only thing in the arena that heals anything: a
+## dead fish stays dead, and a fish topped up during its last stand still dies
+## when the stand runs out, since _tick_last_stand() collects whatever it has at
+## that moment rather than what it had when the blow was refused.
+func heal(amount: int) -> int:
+	if fish == null or not is_alive() or amount <= 0:
+		return 0
+	var gained := fish.heal(amount)
+	if gained > 0:
+		healed.emit(gained)
+	return gained
 
 ## Takes `amount` off the bound fish and returns what it actually lost. This is
 ## the way every touch gets applied; the shove is away from the fish that landed
@@ -1380,14 +1402,35 @@ func _tick_landing() -> void:
 	if not landed or fish == null or not is_alive() or is_stunned() or _hang_left > 0.0:
 		return
 	for spell in fish.ready_spells(SpellData.Trigger.ON_LANDING):
-		var burn := spell.data as BurnZoneSpellData
-		if burn == null:
+		if not _worth_landing(spell.data):
 			continue
 		var damage := spell.try_cast_at(caster_power(spell.data))
 		if damage == SpellInstance.NOT_READY:
 			continue
 		cast_spell.emit(spell.data, null)
+		_apply_on_landing(spell.data, damage)
+
+## Whether a spell waiting on a landing has anything to do with this one. A
+## patch of fire always has; a leech has not, once the fish already has as many
+## out as the spell allows. Refusing here rather than after the cast is what
+## keeps the cooldown from being spent on a leech that was never dropped - a
+## fish lands constantly, so the stack is the pacing and the cooldown only sets
+## how fast the fish can build it back up.
+func _worth_landing(data: SpellData) -> bool:
+	var leech := data as LeechSpellData
+	if leech != null:
+		return leech_count() < leech.max_stacks
+	return data is BurnZoneSpellData
+
+## What a spell does with the landing once it has been paid for.
+func _apply_on_landing(data: SpellData, damage: int) -> void:
+	var burn := data as BurnZoneSpellData
+	if burn != null:
 		_light_zone(burn, damage)
+		return
+	var leech := data as LeechSpellData
+	if leech != null:
+		_drop_leech(leech, damage)
 
 ## Leaves a patch of fire where the fish just came down. Parented alongside it
 ## rather than under it, like every other effect, so it stays where it was lit
@@ -1399,6 +1442,28 @@ func _light_zone(spell: BurnZoneSpellData, damage: int) -> void:
 		damage, self)
 	if zone != null:
 		zone.hit_fish.connect(_on_bubble_hit)
+
+## How many of this fish's leeches are still about, waiting or attached, and
+## the only place the list is pruned: a leech frees itself, so the count is
+## worked out by asking rather than by being told.
+func leech_count() -> int:
+	var live: Array[SpellLeech] = []
+	for leech in _leeches:
+		if is_instance_valid(leech):
+			live.append(leech)
+	_leeches = live
+	return _leeches.size()
+
+## Leaves a leech on the floor where the fish just came down. Parented alongside
+## it like every other effect, so it stays where it was dropped, and kept in
+## `_leeches` so the fish knows how many it has out.
+func _drop_leech(spell: LeechSpellData, damage: int) -> void:
+	var leech := SpellLeech.drop(_effect_parent(), ground_position(), spell,
+		damage, self)
+	if leech == null:
+		return
+	leech.hit_fish.connect(_on_bubble_hit)
+	_leeches.append(leech)
 
 ## Spends a spell that was waiting for the top of a hop. Nothing to shoot at
 ## means the charge is kept rather than spent on the scenery - unlike an ON_HIT
