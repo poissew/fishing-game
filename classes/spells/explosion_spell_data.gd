@@ -44,6 +44,10 @@ const EDGE_KNOCKBACK := 0.45
 ## draws the art exactly as big as the damage reaches.
 @export_range(0.1, 3.0, 0.05) var visual_scale: float = 1.0
 
+@export_category("Sound")
+## The sound that plays on the explosion.
+@export var sfx: AudioStream
+
 ## Flat magic damage: the caster's own stat, scaled. `caster_power` is its
 ## magic_dmg for every non-PHYSICAL type - see SpellInstance.caster_power().
 func compute_damage(caster_power: int) -> int:
