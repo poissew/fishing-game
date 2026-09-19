@@ -11,7 +11,7 @@ config_version=5
 [application]
 
 config/name="fishing-game"
-run/main_scene="uid://crf5qhlis35is"
+run/main_scene="uid://dp6ot5rec32nh"
 config/features=PackedStringArray("4.7", "GL Compatibility")
 config/icon="res://icon.svg"
 
@@ -29,6 +29,7 @@ audio="*res://autoload/audio.gd"
 
 window/size/viewport_width=1920
 window/size/viewport_height=1080
+window/size/mode=4
 window/size/resizable=false
 window/stretch/mode="viewport"
 
