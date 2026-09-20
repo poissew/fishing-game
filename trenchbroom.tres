@@ -6,8 +6,10 @@
 [ext_resource type="Resource" uid="uid://crgpdahjaj" path="res://addons/func_godot/fgd/func_godot_fgd.tres" id="4_cllba"]
 [ext_resource type="Texture2D" uid="uid://decwujsyhj0qy" path="res://addons/func_godot/icon32.png" id="5_2pf7l"]
 [ext_resource type="Script" uid="uid://cx44c4vnq8bt5" path="res://addons/func_godot/src/trenchbroom/trenchbroom_game_config.gd" id="6_7n7oq"]
+[ext_resource type="Resource" path="res://data/fgd/fishing_game_fgd.tres" id="7_fishfgd"]
 
 [resource]
 script = ExtResource("6_7n7oq")
 game_name = "FishingGame"
+fgd_file = ExtResource("7_fishfgd")
 metadata/_custom_type_script = "uid://cx44c4vnq8bt5"

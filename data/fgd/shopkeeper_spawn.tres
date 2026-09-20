@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="FuncGodotFGDPointClass" format=3]
+
+[ext_resource type="Script" path="res://addons/func_godot/src/fgd/func_godot_fgd_point_class.gd" id="1_pointcls"]
+[ext_resource type="PackedScene" path="res://objects/Shopkeeper.tscn" id="2_keeper"]
+
+[resource]
+script = ExtResource("1_pointcls")
+scene_file = ExtResource("2_keeper")
+classname = "shopkeeper_spawn"
+description = "A vendor standing in the world. Instances objects/Shopkeeper.tscn at the marker; the player's InteractRange picks it up on its own, so nothing has to be wired to it."
+auto_apply_to_matching_node_properties = true
+class_properties = Dictionary[String, Variant]({
+"buy_rate": 1.0,
+"shop_name": "Fishmonger"
+})
+class_property_descriptions = Dictionary[String, Variant]({
+"buy_rate": "Share of an item's value this shopkeeper actually pays out. 1.0 is full price.",
+"shop_name": "Name shown on the shop panel."
+})
+meta_properties = Dictionary[String, Variant]({
+"color": Color(0.45098039, 0.84705883, 0.34901962, 1),
+"size": AABB(-16, -16, 0, 16, 16, 58)
+})
+node_groups = Array[String](["shopkeeper"])

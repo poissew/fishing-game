@@ -1,0 +1,54 @@
+// Game: FishingGame
+// Format: Valve
+// entity 0
+{
+"classname" "worldspawn"
+"mapversion" "220"
+// brush 0
+{
+( -512 -512 -16 ) ( -512 -511 -16 ) ( -512 -512 -15 ) text_grass [ 0 1 0 0 ] [ 0 0 -1 0 ] 0 1 1
+( -512 -512 -16 ) ( -512 -512 -15 ) ( -511 -512 -16 ) text_grass [ 1 0 0 0 ] [ 0 0 -1 0 ] 0 1 1
+( -512 -512 -16 ) ( -511 -512 -16 ) ( -512 -511 -16 ) text_grass [ 1 0 0 0 ] [ 0 -1 0 0 ] 0 1 1
+( 512 512 0 ) ( 512 513 0 ) ( 513 512 0 ) text_grass [ 1 0 0 0 ] [ 0 -1 0 0 ] 0 1 1
+( 512 512 0 ) ( 513 512 0 ) ( 512 512 1 ) text_grass [ 1 0 0 0 ] [ 0 0 -1 0 ] 0 1 1
+( 512 512 0 ) ( 512 512 1 ) ( 512 513 0 ) text_grass [ 0 1 0 0 ] [ 0 0 -1 0 ] 0 1 1
+}
+}
+// entity 1
+{
+"classname" "water_volume"
+"biome" "default"
+// brush 0
+{
+( -192 -192 0 ) ( -192 -191 0 ) ( -192 -192 1 ) water [ 0 1 0 0 ] [ 0 0 -1 0 ] 0 1 1
+( -192 -192 0 ) ( -192 -192 1 ) ( -191 -192 0 ) water [ 1 0 0 0 ] [ 0 0 -1 0 ] 0 1 1
+( -192 -192 0 ) ( -191 -192 0 ) ( -192 -191 0 ) water [ 1 0 0 0 ] [ 0 -1 0 0 ] 0 1 1
+( 192 192 24 ) ( 192 193 24 ) ( 193 192 24 ) water [ 1 0 0 0 ] [ 0 -1 0 0 ] 0 1 1
+( 192 192 24 ) ( 193 192 24 ) ( 192 192 25 ) water [ 1 0 0 0 ] [ 0 0 -1 0 ] 0 1 1
+( 192 192 24 ) ( 192 192 25 ) ( 192 193 24 ) water [ 0 1 0 0 ] [ 0 0 -1 0 ] 0 1 1
+}
+}
+// entity 2
+{
+"classname" "fish_spawn"
+"origin" "-128 0 64"
+"team" "0"
+"tint" "255 184 158"
+"spawn_order" "0"
+}
+// entity 3
+{
+"classname" "fish_spawn"
+"origin" "128 0 64"
+"team" "1"
+"tint" "168 214 255"
+"spawn_order" "1"
+}
+// entity 4
+{
+"classname" "shopkeeper_spawn"
+"origin" "0 256 0"
+"angle" "270"
+"shop_name" "Dockside Fishmonger"
+"buy_rate" "0.75"
+}

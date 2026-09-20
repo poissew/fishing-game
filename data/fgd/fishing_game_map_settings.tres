@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="FuncGodotMapSettings" format=3]
+
+[ext_resource type="Script" path="res://addons/func_godot/src/map/func_godot_map_settings.gd" id="1_mapset"]
+[ext_resource type="Resource" path="res://data/fgd/fishing_game_fgd.tres" id="2_fishfgd"]
+[ext_resource type="Material" path="res://addons/func_godot/textures/default_material.tres" id="3_defmat"]
+
+[resource]
+script = ExtResource("1_mapset")
+entity_fgd = ExtResource("2_fishfgd")
+default_material = ExtResource("3_defmat")

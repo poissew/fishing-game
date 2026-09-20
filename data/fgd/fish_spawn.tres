@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="FuncGodotFGDPointClass" format=3]
+
+[ext_resource type="Script" path="res://addons/func_godot/src/fgd/func_godot_fgd_point_class.gd" id="1_pointcls"]
+
+[resource]
+script = ExtResource("1_pointcls")
+classname = "fish_spawn"
+description = "Where one fighter drops into the arena. Builds a FishSpawn marker in the 'fish_spawn' group; the arena reads the points and spawns the BattleFish itself."
+class_properties = Dictionary[String, Variant]({
+"spawn_order": 0,
+"team": -1,
+"tint": Color(1, 1, 1, 1)
+})
+class_property_descriptions = Dictionary[String, Variant]({
+"spawn_order": "Order the arena fills spawn points in, lowest first.",
+"team": "Side this fighter is on. Matches BattleFish.team: -1 is free-for-all, and fish sharing a team never damage each other.",
+"tint": "Team colour laid over the fish's own icon, so two fish of one species are told apart."
+})
+meta_properties = Dictionary[String, Variant]({
+"color": Color(1, 0.54901963, 0.19607843, 1),
+"size": AABB(-16, -16, -16, 16, 16, 16)
+})
+node_class = "FishSpawn"
+node_groups = Array[String](["fish_spawn"])
