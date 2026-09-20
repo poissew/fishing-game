@@ -1,0 +1,30 @@
+[gd_resource type="Resource" script_class="FuncGodotFGDSolidClass" format=3]
+
+[ext_resource type="Script" path="res://addons/func_godot/src/fgd/func_godot_fgd_solid_class.gd" id="1_solidcls"]
+[ext_resource type="Resource" path="res://addons/func_godot/fgd/vertex_merge_distance_base.tres" id="2_vmerge"]
+[ext_resource type="Resource" path="res://addons/func_godot/fgd/phong_base.tres" id="3_phong"]
+
+[resource]
+script = ExtResource("1_solidcls")
+global_illumination_mode = 0
+shadow_casting_setting = 0
+collision_layer = 2
+collision_mask = 2
+classname = "water_volume"
+description = "A body of water you can fish in. Builds a WaterVolume (Area3D) on physics layer 2 with the brush mesh beside it, in the 'water' group plus whichever biome group was chosen."
+base_classes = Array[Resource]([ExtResource("3_phong"), ExtResource("2_vmerge")])
+class_properties = Dictionary[String, Variant]({
+"biome": {
+"Default": "default",
+"Tropical": "tropical",
+"Atlantic": "atlantic"
+}
+})
+class_property_descriptions = Dictionary[String, Variant]({
+"biome": ["Which loot table the bobber draws from in here. Added to the node as a group and read back by Bobber.get_water_state().", "default"]
+})
+meta_properties = Dictionary[String, Variant]({
+"color": Color(0.25098041, 0.5490196, 0.9490196, 1)
+})
+node_class = "WaterVolume"
+node_groups = Array[String](["water"])

@@ -1,0 +1,14 @@
+[remap]
+
+importer="func_godot.map"
+type="Resource"
+uid="uid://bjfvdo5o73l4t"
+path="res://.godot/imported/example_entities.map-5c23d7f8472f85d5609766c882626d69.tres"
+
+[deps]
+
+source_file="res://levels/maps/example_entities.map"
+dest_files=["res://.godot/imported/example_entities.map-5c23d7f8472f85d5609766c882626d69.tres"]
+
+[params]
+

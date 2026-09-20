@@ -35,7 +35,11 @@ window/stretch/mode="viewport"
 
 [editor_plugins]
 
-enabled=PackedStringArray()
+enabled=PackedStringArray("res://addons/func_godot/plugin.cfg")
+
+[func_godot]
+
+default_map_settings="res://data/fgd/fishing_game_map_settings.tres"
 
 [global_group]
 
@@ -44,6 +48,8 @@ tropical="tropical, activate with water tag"
 atlantic="atlantic water wallah"
 mud="tf you mean mud"
 lava="laval xd"
+fish_spawn="where a BattleFish drops into the arena"
+shopkeeper="a vendor you can sell to"
 
 [gui]
 
