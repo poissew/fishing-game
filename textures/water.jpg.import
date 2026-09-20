@@ -3,7 +3,7 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://cya3vax21tv5c"
-path.s3tc="res://.godot/imported/67_sea water foam texture-seamless.jpg-2a617ac5ade7ec2e44c58dbf69ab46c2.s3tc.ctex"
+path.s3tc="res://.godot/imported/water.jpg-746c7f920cd8ffe5d68b766f3ecbdd37.s3tc.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc"],
 "vram_texture": true
@@ -11,8 +11,8 @@ metadata={
 
 [deps]
 
-source_file="res://textures/67_sea water foam texture-seamless.jpg"
-dest_files=["res://.godot/imported/67_sea water foam texture-seamless.jpg-2a617ac5ade7ec2e44c58dbf69ab46c2.s3tc.ctex"]
+source_file="res://textures/water.jpg"
+dest_files=["res://.godot/imported/water.jpg-746c7f920cd8ffe5d68b766f3ecbdd37.s3tc.ctex"]
 
 [params]
 
