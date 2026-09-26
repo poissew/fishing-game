@@ -29,6 +29,11 @@ const WEIGHT_SPREAD := 0.25
 const QUALITY_BASE := 0.8
 const QUALITY_STEP := 0.1
 
+## How many spells a fish can carry in all - what it rolled plus what it was
+## taught with a SpellCharm. One past FishData.max_spells, so a fish that rolled
+## a full hand can still be taught one more.
+const SPELL_SLOTS := 4
+
 @export var size: float
 @export var weight: float
 @export var quality: int
@@ -148,6 +153,27 @@ func ready_spells(trigger: SpellData.Trigger) -> Array[SpellInstance]:
 		if spell != null and spell.is_ready() and spell.data.trigger == trigger:
 			ready.append(spell)
 	return ready
+
+func knows_spell(spell_data: SpellData) -> bool:
+	for spell in spells:
+		if spell != null and spell.data == spell_data:
+			return true
+	return false
+
+## Whether a SpellCharm of `spell_data` would take: a free slot, and not a
+## spell the fish already carries - the same no-duplicates rule roll_spells()
+## keeps.
+func can_learn(spell_data: SpellData) -> bool:
+	return spell_data != null and spells.size() < SPELL_SLOTS \
+		and not knows_spell(spell_data)
+
+## Adds `spell_data` to what this fish casts. It fights with it from the next
+## battle on; bind_fish() resets its cooldown with the rest.
+func learn_spell(spell_data: SpellData) -> bool:
+	if not can_learn(spell_data):
+		return false
+	spells.append(SpellInstance.create_spell_instance(spell_data))
+	return true
 
 func is_alive() -> bool:
 	return current_health > 0

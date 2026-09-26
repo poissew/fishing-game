@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="FuncGodotFGDPointClass" format=3]
+
+[ext_resource type="Script" path="res://addons/func_godot/src/fgd/func_godot_fgd_point_class.gd" id="1_pointcls"]
+[ext_resource type="PackedScene" path="res://objects/SlotMachine.tscn" id="2_slot"]
+
+[resource]
+script = ExtResource("1_pointcls")
+scene_file = ExtResource("2_slot")
+classname = "slot_machine_spawn"
+description = "A slot machine that sells spell charms. Instances objects/SlotMachine.tscn at the marker, facing the entity's angle; the player's InteractRange picks it up on its own, so nothing has to be wired to it."
+auto_apply_to_matching_node_properties = true
+class_properties = Dictionary[String, Variant]({
+"cost": 20,
+"machine_name": "Lucky Lure",
+"win_chance": 0.4
+})
+class_property_descriptions = Dictionary[String, Variant]({
+"cost": "Cash one pull costs.",
+"machine_name": "Name painted on the cabinet and shown on the machine's panel.",
+"win_chance": "Chance a pull pays out a spell charm, 0 to 1. The rest of the time the money is gone. The prize is drawn evenly from every spell in FishData.SPELL_POOL."
+})
+meta_properties = Dictionary[String, Variant]({
+"color": Color(0.92, 0.72, 0.22, 1),
+"size": AABB(-10, -13, 0, 10, 13, 58)
+})
+node_groups = Array[String](["slot_machine"])

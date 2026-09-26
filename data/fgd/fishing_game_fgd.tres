@@ -1,13 +1,14 @@
-[gd_resource type="Resource" script_class="FuncGodotFGDFile" format=3]
+[gd_resource type="Resource" script_class="FuncGodotFGDFile" format=3 uid="uid://dpafhvy2qnfd"]
 
-[ext_resource type="Script" path="res://addons/func_godot/src/fgd/func_godot_fgd_file.gd" id="1_fgdfile"]
-[ext_resource type="Resource" path="res://addons/func_godot/fgd/func_godot_fgd.tres" id="2_basefgd"]
+[ext_resource type="Script" uid="uid://drlmgulwbjwqu" path="res://addons/func_godot/src/fgd/func_godot_fgd_file.gd" id="1_fgdfile"]
+[ext_resource type="Resource" uid="uid://crgpdahjaj" path="res://addons/func_godot/fgd/func_godot_fgd.tres" id="2_basefgd"]
 [ext_resource type="Resource" path="res://data/fgd/fish_spawn.tres" id="3_fishspawn"]
 [ext_resource type="Resource" path="res://data/fgd/water_volume.tres" id="4_water"]
 [ext_resource type="Resource" path="res://data/fgd/shopkeeper_spawn.tres" id="5_keeper"]
+[ext_resource type="Resource" path="res://data/fgd/slot_machine_spawn.tres" id="6_slot"]
 
 [resource]
 script = ExtResource("1_fgdfile")
 fgd_name = "FishingGame"
 base_fgd_files = Array[Resource]([ExtResource("2_basefgd")])
-entity_definitions = Array[Resource]([ExtResource("4_water"), ExtResource("3_fishspawn"), ExtResource("5_keeper")])
+entity_definitions = Array[Resource]([ExtResource("4_water"), ExtResource("3_fishspawn"), ExtResource("5_keeper"), ExtResource("6_slot")])

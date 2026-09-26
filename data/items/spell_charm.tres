@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="Item" format=3]
+
+[ext_resource type="Script" uid="uid://cma1hnb7e5v40" path="res://classes/item.gd" id="1_item"]
+[ext_resource type="Texture2D" uid="uid://bhpibbpddih7u" path="res://icon.svg" id="2_icon"]
+
+[resource]
+script = ExtResource("1_item")
+id = 200
+name = "Spell Charm"
+icon = ExtResource("2_icon")
+size = Vector2i(1, 1)
+rotatable = false

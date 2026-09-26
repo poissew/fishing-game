@@ -35,7 +35,8 @@ Item (Resource)           — base item: id, name, icon, size, rotatable
 
 ItemInstance (Resource)   — runtime placement: data ref + grid position + rotated flag
 ├── FishInstance          — adds size, weight, quality, fighting stats, current_health; has create_fish_instance(FishData)
-└── RodInstance           — adds durability; has create_rod_instance(RodData)
+├── RodInstance           — adds durability; has create_rod_instance(RodData)
+└── SpellCharm            — adds spell (SpellData); what a SlotMachine pays out, dropped on a fish to teach it
 
 SpellData (Resource)      — static spell definition: name, trigger, base_power, base_type, base_cooldown
 ├── ExplosionSpellData    — adds damage_scale, radius, knockback_scale, frames; an ON_HIT blast
@@ -291,6 +292,16 @@ FISHING  ──day runs out──>  SELECTION  ──fish picked──>  BATTLE 
 - Hands are the source of truth for what is equipped: `Player.equipped_rod` is a read-only property backed by `hands.get_rod()`
 - Use `Player.equip_item(item, slot)` / `unequip_slot(slot)` to move items between hands and inventory
 - While the inventory is open, items can be dragged between the grid and the hand slots; `E` on a held item equips it
+
+### Slot machine
+
+- `SlotMachine` (`classes/slot_machine.gd` + `objects/SlotMachine.tscn`, `StaticBody3D`) is a prototype gambling machine on the pond's west bank in `main.tscn`: pay `cost`, pull, and `win_chance` of the time a `SpellCharm` comes out; the rest of the time the money is gone. The prize is drawn evenly from `spell_pool`, or from `FishData.SPELL_POOL` when that is empty, so a new spell turns up in the machine without touching it. The cabinet is placeholder boxes with its `Sign` / `Price` `Label3D`s filled from the exports in `_ready()`; its front is **−Z**.
+- Like `Shopkeeper` it knows nothing about the player — it names a price and rolls a prize. The player's `InteractRange` finds it on its own; when a shopkeeper and a machine are both in reach, E and the prompt both go to the shopkeeper.
+- **`Player.gamble()` settles the pull before the reels move**: it checks the wallet and for a free cell (a charm is 1×1 — no room, no pull, no charge), takes the money and puts the charm in the inventory. `UISlotMachine.spin(prize)` then only animates the reveal, landing three of the prize on a win and anything else on a loss (with `NEAR_MISS` of losses two-of-a-kind). Closing the panel mid-spin, or the day ending under it, therefore loses the show and never the prize.
+- `UISlotMachine` (`classes/ui/UI_SlotMachine.gd` + `ui/UI_SlotMachine.tscn`) is drawn in `_draw()` like `UIShop`, and like it stays visible while closed because it owns the `[E]` prompt; `is_open` gates the panel. Reels show spell names, clipped to 12 characters, plus a `FISHBONE` dud — which is also what lets a one-spell pool show a loss.
+- **Sounds are optional exports** (`sfx_pull`, `sfx_win`, `sfx_lose`) and the machine is silent until they are set.
+- **Teaching a fish**: drag a charm onto a fish in the inventory grid (or in a hand) and `FishInstance.learn_spell()` adds it and the charm is used up. `can_learn()` refuses a spell the fish already carries — the same no-duplicates rule `roll_spells()` keeps — and a fish already on `FishInstance.SPELL_SLOTS` (4, one past `max_spells`); the held charm draws red over a fish that cannot take it and green over one that can. Charms are purple in the grid, since they all share `icon.svg`. The inventory preview lists a fish's spells as `Spells n/4: …`.
+- **TrenchBroom**: `slot_machine_spawn` (`data/fgd/slot_machine_spawn.tres`), a point entity instancing the scene, with `machine_name`, `cost` and `win_chance` auto-applied to the node. It faces the entity's `angle`. `spell_pool` and the sounds are not exposed to the map — set them on the scene. After changing the definition, re-export the FGD from `trenchbroom.tres` in the editor so TrenchBroom sees it.
 
 ### Input map
 
