@@ -28,6 +28,10 @@ const C_HELD_BAD     := Color(0.72, 0.16, 0.14, 0.88)
 const C_ZONE_FILL     := Color(0.30, 0.70, 0.32, 0.22)
 const C_ZONE_FILL_DIM := Color(0.05, 0.08, 0.05, 0.35)
 const HAND_LABELS     := ["L", "R"]
+# Spell charms share one icon, so their cell colour is what tells them apart
+# from the rest of the bag.
+const C_CHARM         := Color(0.42, 0.20, 0.52, 0.92)
+const C_CHARM_HOVER   := Color(0.56, 0.30, 0.68, 0.92)
 
 @onready var _name_label:  Label = $ItemPreview/Name
 @onready var _stats_label: Label = $ItemPreview/Stats
@@ -74,6 +78,10 @@ func _ready() -> void:
 	var preview := $ItemPreview as Control
 	preview.position = _grid_offset + Vector2(grid_px.x + GRID_GAP, 0)
 	preview.size     = Vector2(PREVIEW_W, grid_px.y)
+	# A fish's spell list and a charm's description both run long; wrap them to
+	# the column and cut off whatever falls past the bottom of it.
+	_stats_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_stats_label.clip_text     = true
 
 func open() -> void:
 	_held_item = null
@@ -145,6 +153,8 @@ func _draw_items() -> void:
 	for item in inventory.items:
 		var hovered := _held_item == null and _is_cell_over_item(_hovered_cell, item)
 		var color   := C_ITEM_HOVER if hovered else C_ITEM
+		if item is SpellCharm:
+			color = C_CHARM_HOVER if hovered else C_CHARM
 		_draw_item(item, _grid_offset + Vector2(item.position) * CELL_SIZE, color)
 
 func _draw_held() -> void:
@@ -159,6 +169,8 @@ func _draw_held() -> void:
 	var ok := placement != Vector2i(-1, -1) and inventory.can_place(_held_item, placement)
 	if not ok:
 		ok = _can_drop_in_hand(_hand_slot_at_mouse())
+	if not ok:
+		ok = _charm_target(_hovered_cell) != null
 	_draw_item(_held_item, draw_pos, C_HELD_OK if ok else C_HELD_BAD)
 
 ## Outline where the 3D hands sit on screen, so a dragged item has a target.
@@ -181,7 +193,9 @@ func _draw_item(item: ItemInstance, pos: Vector2, color: Color) -> void:
 	var fp   := Vector2(item.get_footprint()) * CELL_SIZE
 	var rect := Rect2(pos, fp)
 	draw_rect(rect.grow(-1), color)
-	draw_rect(rect, C_ITEM_BORDER if color == C_ITEM or color == C_ITEM_HOVER else color.lightened(0.25), false)
+	var resting := color == C_ITEM or color == C_ITEM_HOVER \
+		or color == C_CHARM or color == C_CHARM_HOVER
+	draw_rect(rect, C_ITEM_BORDER if resting else color.lightened(0.25), false)
 	var icon: Texture2D = item.data.icon if item.data.icon else _default_icon
 	var s    := minf(fp.x, fp.y) - 4.0
 	if s > 0:
@@ -258,6 +272,12 @@ func _try_pickup_hand() -> void:
 	queue_redraw()
 
 func _try_drop(hovered: Vector2i) -> void:
+	# Checked first: a charm over a fish is aimed at the fish, and would
+	# otherwise be refused as overlapping it.
+	if _teach_held(hovered):
+		queue_redraw()
+		return
+
 	var slot := _hand_slot_at_mouse()
 	if slot >= 0:
 		if _drop_in_hand(slot):
@@ -290,6 +310,32 @@ func _drop_in_hand(slot: int) -> bool:
 	_held_item.rotated = _origin_rot
 	hands.set_item(slot, _held_item)
 	return true
+
+## A spell charm let go over a fish teaches it the spell and is used up,
+## instead of being put down. False when there is nothing to teach - no charm
+## held, no fish under it, or a fish that cannot take this spell.
+func _teach_held(hovered: Vector2i) -> bool:
+	var fish := _charm_target(hovered)
+	if fish == null or not fish.learn_spell((_held_item as SpellCharm).spell):
+		return false
+	_release_held()
+	_show_preview(fish)
+	return true
+
+## The fish the held charm would teach if it were let go now: the one under the
+## cursor in the grid or in a hand, if it has room for the spell. Null
+## otherwise, including when what is held is not a charm at all.
+func _charm_target(hovered: Vector2i) -> FishInstance:
+	var charm := _held_item as SpellCharm
+	if charm == null:
+		return null
+	var target := _item_at(hovered)
+	if target == null and hands != null:
+		target = hands.get_item(_hand_slot_at_mouse())
+	var fish := target as FishInstance
+	if fish == null or not fish.can_learn(charm.spell):
+		return null
+	return fish
 
 func _release_held() -> void:
 	_held_item      = null
@@ -389,13 +435,38 @@ func _is_cell_over_item(cell: Vector2i, item: ItemInstance) -> bool:
 func _show_preview(item: ItemInstance) -> void:
 	_name_label.text = item.data.name
 	if item is FishInstance:
-		_stats_label.text = "Size:    %.2f\nWeight:  %.2f\nQuality: %d\nValue:   %d" % [
-			item.size, item.weight, item.quality, item.get_value()
+		_stats_label.text = "Size:    %.2f\nWeight:  %.2f\nQuality: %d\nValue:   %d\n%s" % [
+			item.size, item.weight, item.quality, item.get_value(),
+			_describe_spells(item as FishInstance)
 		]
+	elif item is SpellCharm:
+		var charm := item as SpellCharm
+		_name_label.text = charm.display_name()
+		_stats_label.text = _describe_charm(charm)
 	elif item is RodInstance:
 		_stats_label.text = "Durability:\n%.0f / %.0f" % [item.durability, item.data.durability_max]
 	else:
 		_stats_label.text = ""
+
+## "Spells 2/4: Detonate, Leech" - one line that the label wraps, since four
+## long names would not fit one per line under the four stats above them.
+func _describe_spells(fish: FishInstance) -> String:
+	var names: PackedStringArray = []
+	for spell in fish.spells:
+		if spell != null and spell.data != null:
+			names.append(spell.data.name)
+	return "Spells %d/%d: %s" % [names.size(), FishInstance.SPELL_SLOTS,
+		", ".join(names) if not names.is_empty() else "none"]
+
+## What the charm holds, the instruction first so it is never the part cut off.
+func _describe_charm(charm: SpellCharm) -> String:
+	var spell := charm.spell
+	if spell == null:
+		return ""
+	var timing := "passive" if spell.trigger == SpellData.Trigger.PASSIVE \
+		else "%ds cooldown" % spell.base_cooldown
+	return "Drop on a fish to teach it.\n%s, %s\n%s" % [
+		spell.type_name(), timing, spell.description]
 
 func _clear_preview() -> void:
 	_name_label.text  = ""

@@ -52,3 +52,12 @@
 "shop_name" "Dockside Fishmonger"
 "buy_rate" "0.75"
 }
+// entity 5
+{
+"classname" "slot_machine_spawn"
+"origin" "232 -96 0"
+"angle" "180"
+"machine_name" "Lucky Lure"
+"cost" "20"
+"win_chance" "0.4"
+}

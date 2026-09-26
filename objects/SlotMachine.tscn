@@ -1,0 +1,123 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://classes/slot_machine.gd" id="1_slot"]
+[ext_resource type="FontFile" path="res://ui/fonts/monogram.ttf" id="2_font"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_cabinet"]
+size = Vector3(0.8, 1.8, 0.6)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_cabinet"]
+shading_mode = 0
+albedo_color = Color(0.62, 0.12, 0.16, 1)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_trim"]
+shading_mode = 0
+albedo_color = Color(0.92, 0.72, 0.22, 1)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_screen"]
+shading_mode = 0
+albedo_color = Color(0.08, 0.06, 0.1, 1)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_reel"]
+shading_mode = 0
+albedo_color = Color(0.94, 0.92, 0.84, 1)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_metal"]
+shading_mode = 0
+albedo_color = Color(0.7, 0.72, 0.76, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_cabinet"]
+size = Vector3(0.8, 1.6, 0.6)
+
+[sub_resource type="BoxMesh" id="BoxMesh_topper"]
+size = Vector3(0.86, 0.22, 0.64)
+
+[sub_resource type="BoxMesh" id="BoxMesh_screen"]
+size = Vector3(0.62, 0.34, 0.02)
+
+[sub_resource type="BoxMesh" id="BoxMesh_reel"]
+size = Vector3(0.16, 0.24, 0.02)
+
+[sub_resource type="BoxMesh" id="BoxMesh_tray"]
+size = Vector3(0.5, 0.08, 0.16)
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_lever"]
+top_radius = 0.025
+bottom_radius = 0.025
+height = 0.5
+
+[sub_resource type="SphereMesh" id="SphereMesh_knob"]
+radius = 0.07
+height = 0.14
+
+[node name="SlotMachine" type="StaticBody3D"]
+script = ExtResource("1_slot")
+
+[node name="Collision" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
+shape = SubResource("BoxShape3D_cabinet")
+
+[node name="Cabinet" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, 0)
+mesh = SubResource("BoxMesh_cabinet")
+surface_material_override/0 = SubResource("StandardMaterial3D_cabinet")
+
+[node name="Topper" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.71, 0)
+mesh = SubResource("BoxMesh_topper")
+surface_material_override/0 = SubResource("StandardMaterial3D_trim")
+
+[node name="Screen" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.15, -0.305)
+mesh = SubResource("BoxMesh_screen")
+surface_material_override/0 = SubResource("StandardMaterial3D_screen")
+
+[node name="ReelLeft" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.19, 1.15, -0.315)
+mesh = SubResource("BoxMesh_reel")
+surface_material_override/0 = SubResource("StandardMaterial3D_reel")
+
+[node name="ReelMiddle" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.15, -0.315)
+mesh = SubResource("BoxMesh_reel")
+surface_material_override/0 = SubResource("StandardMaterial3D_reel")
+
+[node name="ReelRight" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.19, 1.15, -0.315)
+mesh = SubResource("BoxMesh_reel")
+surface_material_override/0 = SubResource("StandardMaterial3D_reel")
+
+[node name="Tray" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.45, -0.36)
+mesh = SubResource("BoxMesh_tray")
+surface_material_override/0 = SubResource("StandardMaterial3D_trim")
+
+[node name="Lever" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.44, 1.2, 0)
+mesh = SubResource("CylinderMesh_lever")
+surface_material_override/0 = SubResource("StandardMaterial3D_metal")
+
+[node name="Knob" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.44, 1.48, 0)
+mesh = SubResource("SphereMesh_knob")
+surface_material_override/0 = SubResource("StandardMaterial3D_cabinet")
+
+[node name="Sign" type="Label3D" parent="."]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 1.71, -0.325)
+pixel_size = 0.01
+texture_filter = 0
+modulate = Color(0.2, 0.08, 0.06, 1)
+outline_size = 0
+text = "LUCKY LURE"
+font = ExtResource("2_font")
+font_size = 16
+
+[node name="Price" type="Label3D" parent="."]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 0.8, -0.305)
+pixel_size = 0.008
+texture_filter = 0
+modulate = Color(0.92, 0.72, 0.22, 1)
+outline_size = 0
+text = "$20 A PULL"
+font = ExtResource("2_font")
+font_size = 16
