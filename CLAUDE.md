@@ -303,6 +303,11 @@ FISHING  ──day runs out──>  SELECTION  ──fish picked──>  BATTLE 
 - **Teaching a fish**: drag a charm onto a fish in the inventory grid (or in a hand) and `FishInstance.learn_spell()` adds it and the charm is used up. `can_learn()` refuses a spell the fish already carries — the same no-duplicates rule `roll_spells()` keeps — and a fish already on `FishInstance.SPELL_SLOTS` (4, one past `max_spells`); the held charm draws red over a fish that cannot take it and green over one that can. Charms are purple in the grid, since they all share `icon.svg`. The inventory preview lists a fish's spells as `Spells n/4: …`.
 - **TrenchBroom**: `slot_machine_spawn` (`data/fgd/slot_machine_spawn.tres`), a point entity instancing the scene, with `machine_name`, `cost` and `win_chance` auto-applied to the node. It faces the entity's `angle`. `spell_pool` and the sounds are not exposed to the map — set them on the scene. After changing the definition, re-export the FGD from `trenchbroom.tres` in the editor so TrenchBroom sees it.
 
+### Water surface
+
+- `textures/water.tres` is a `ShaderMaterial` on `shaders/water.gdshader`: `water.jpg` scrolling slowly (`scroll_speed`) with two crossed sines wobbling the texture (`wave_strength` / `wave_frequency` / `wave_speed`). It is the one water material — the pond in `levels/trees.tscn` uses it, and FuncGodot picks it up for any brush textured `water`.
+- The UVs are **world XZ** (`uv_scale` repeats per unit), so a CSG box and a brush tile the same way. The waves are on the texture, not the vertices: a water brush is a handful of triangles with nothing in the middle to move.
+
 ### Props
 
 - `static_prop_tree` (`data/fgd/static_prop_tree.tres`) is a TrenchBroom point entity instancing `objects/scene/tree_prop.tscn`: the `models/tree.glb` crossed quads with the base on the entity's origin, scaled to exactly the sprite trees' 2.86 × 5.12 (the glb's own quads are 2 × 3.25, which also squashes the 143×256 texture) and carrying the same capsule collider as `objects/scene/tree.tscn`.
