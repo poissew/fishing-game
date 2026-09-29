@@ -1,0 +1,18 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" uid="uid://docfc57bplc5j" path="res://models/tree.glb" id="1_treeglb"]
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_treeprop"]
+radius = 1.0
+height = 6.408
+
+[node name="TreeProp" type="Node3D"]
+
+[node name="Model" parent="." instance=ExtResource("1_treeglb")]
+transform = Transform3D(1.43, 0, 0, 0, 1.5753846, 0, 0, 0, 1.43, 0, 2.56, 0)
+
+[node name="StaticBody3D" type="StaticBody3D" parent="."]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="StaticBody3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.494, 0)
+shape = SubResource("CapsuleShape3D_treeprop")

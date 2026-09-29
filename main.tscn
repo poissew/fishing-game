@@ -18,8 +18,8 @@ stretch = true
 stretch_shrink = 4
 
 [node name="SubViewport" type="SubViewport" parent="pixel" unique_id=151043387]
-audio_listener_enable_3d = true
 handle_input_locally = false
+audio_listener_enable_3d = true
 size = Vector2i(480, 270)
 render_target_update_mode = 4
 
@@ -32,5 +32,5 @@ transform = Transform3D(1.85, 0, 0, 0, 1.85, 0, 0, 0, 1.85, 0, -0.6632441, 0)
 [node name="Shopkeeper" parent="pixel/SubViewport" unique_id=1963068962 instance=ExtResource("4_shopk")]
 transform = Transform3D(-0.7193, 0, 0.6947, 0, 1, 0, -0.6947, 0, -0.7193, -2, -1.0923, -0.5)
 
-[node name="SlotMachine" parent="pixel/SubViewport" instance=ExtResource("5_slot")]
+[node name="SlotMachine" parent="pixel/SubViewport" unique_id=345792932 instance=ExtResource("5_slot")]
 transform = Transform3D(-0.8146, 0, 0.5801, 0, 1, 0, -0.5801, 0, -0.8146, 2.4, -1.0923, -1.8)

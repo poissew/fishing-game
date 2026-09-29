@@ -303,6 +303,12 @@ FISHING  ──day runs out──>  SELECTION  ──fish picked──>  BATTLE 
 - **Teaching a fish**: drag a charm onto a fish in the inventory grid (or in a hand) and `FishInstance.learn_spell()` adds it and the charm is used up. `can_learn()` refuses a spell the fish already carries — the same no-duplicates rule `roll_spells()` keeps — and a fish already on `FishInstance.SPELL_SLOTS` (4, one past `max_spells`); the held charm draws red over a fish that cannot take it and green over one that can. Charms are purple in the grid, since they all share `icon.svg`. The inventory preview lists a fish's spells as `Spells n/4: …`.
 - **TrenchBroom**: `slot_machine_spawn` (`data/fgd/slot_machine_spawn.tres`), a point entity instancing the scene, with `machine_name`, `cost` and `win_chance` auto-applied to the node. It faces the entity's `angle`. `spell_pool` and the sounds are not exposed to the map — set them on the scene. After changing the definition, re-export the FGD from `trenchbroom.tres` in the editor so TrenchBroom sees it.
 
+### Props
+
+- `static_prop_tree` (`data/fgd/static_prop_tree.tres`) is a TrenchBroom point entity instancing `objects/scene/tree_prop.tscn`: the `models/tree.glb` crossed quads with the base on the entity's origin, scaled to exactly the sprite trees' 2.86 × 5.12 (the glb's own quads are 2 × 3.25, which also squashes the 143×256 texture) and carrying the same capsule collider as `objects/scene/tree.tscn`.
+- It is a `FuncGodotFGDModelPointClass`, so exporting `trenchbroom.tres` also writes a display model to `trenchbroom_models/static_prop_tree.glb` (that folder has a `.gdignore`, so Godot never imports it). One class per model — the display model is generated per classname — so the next prop is a new `static_prop_<name>` resource.
+- The glb's material is replaced on import by `models/tree_material.tres` (unshaded, alpha scissor, nearest), matching the `Sprite3D` trees; the lit PBR material glTF import produces by default is why the model first came out darker.
+
 ### Input map
 
 | Action | Key/Button |

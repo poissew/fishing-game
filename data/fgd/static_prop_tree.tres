@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="FuncGodotFGDModelPointClass" format=3 uid="uid://8osldtvmcvln"]
+
+[ext_resource type="Script" uid="uid://ldfqjtq0br35" path="res://addons/func_godot/src/fgd/func_godot_fgd_model_point_class.gd" id="1_modelcls"]
+[ext_resource type="Script" uid="uid://d1nwwgcrner8b" path="res://addons/func_godot/src/fgd/func_godot_fgd_point_class_display_descriptor.gd" id="1_vvtcv"]
+[ext_resource type="PackedScene" path="res://objects/scene/tree_prop.tscn" id="2_tree"]
+
+[resource]
+script = ExtResource("1_modelcls")
+target_map_editor = 1
+models_sub_folder = "trenchbroom_models"
+scene_file = ExtResource("2_tree")
+classname = "static_prop_tree"
+description = "A tree. Instances objects/scene/tree_prop.tscn with its base on the marker, the same size as the sprite trees in objects/scene/tree.tscn, collision included."
+meta_properties = Dictionary[String, Variant]({
+"color": Color(0.3, 0.62, 0.25, 1),
+"model": "{\"path\": \"trenchbroom_models/static_prop_tree.glb\", \"scale\": 32.0 }",
+"size": AABB(-46, -46, 0, 46, 46, 164)
+})
+node_groups = Array[String](["static_prop"])
