@@ -1,8 +1,9 @@
-[gd_resource type="StandardMaterial3D" format=3]
+[gd_resource type="ShaderMaterial" format=3]
 
-[ext_resource type="Texture2D" path="res://textures/water.jpg" id="1_0vbwo"]
+[ext_resource type="Shader" path="res://shaders/water.gdshader" id="1_shader"]
+[ext_resource type="Texture2D" uid="uid://cya3vax21tv5c" path="res://textures/water.jpg" id="2_tex"]
 
 [resource]
-albedo_texture = ExtResource("1_0vbwo")
-metallic_specular = 0.0
-texture_filter = 2
+render_priority = 0
+shader = ExtResource("1_shader")
+shader_parameter/albedo_texture = ExtResource("2_tex")
