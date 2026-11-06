@@ -55,15 +55,13 @@ func _input(event: InputEvent) -> void:
 	if event.is_action_pressed("pause"):
 		if shop_ui.is_open:
 			_close_shop()
-		elif slot_ui.is_open:
-			_close_slot_machine()
 		elif inventory_ui.visible:
 			_toggle_inventory()
 		else:
 			get_tree().quit()
 		return
 
-	if shop_ui.is_open or slot_ui.is_open:
+	if shop_ui.is_open:
 		return
 
 	if event.is_action_pressed("open_inventory"):
@@ -77,7 +75,7 @@ func _input(event: InputEvent) -> void:
 			_open_shop(_nearby_shopkeeper)
 			return
 		if _nearby_machine != null:
-			_open_slot_machine(_nearby_machine)
+			_pull_machine(_nearby_machine)
 			return
 
 	if Input.is_action_just_pressed("left_click"):
@@ -114,8 +112,6 @@ func _ready() -> void:
 	var slot = load("res://ui/UI_SlotMachine.tscn")
 	slot_ui = slot.instantiate()
 	slot_ui.bind_wallet(wallet)
-	slot_ui.pull_requested.connect(_on_pull_requested)
-	slot_ui.close_requested.connect(_close_slot_machine)
 	add_child(slot_ui)
 
 	# Added last, so the end-of-day screens draw over every other panel.
@@ -147,7 +143,7 @@ func _ready() -> void:
 	equip_item(_inst, Hands.Slot.RIGHT)
 
 func _unhandled_input(event: InputEvent) -> void:
-	if inventory_ui.visible or shop_ui.is_open or slot_ui.is_open or not gamephase.is_fishing():
+	if inventory_ui.visible or shop_ui.is_open or not gamephase.is_fishing():
 		return
 	if event is InputEventMouseMotion:
 		head.rotate_y(-event.relative.x * options.MOUSE_SENS)
@@ -155,7 +151,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		camera.rotation.x = clamp(camera.rotation.x, deg_to_rad(-80), deg_to_rad(80))
 
 func _physics_process(delta: float) -> void:
-	if inventory_ui.visible or shop_ui.is_open or slot_ui.is_open or not gamephase.is_fishing():
+	if inventory_ui.visible or shop_ui.is_open or not gamephase.is_fishing():
 		return
 
 	if not is_on_floor():
@@ -257,8 +253,7 @@ func _on_selection_started() -> void:
 		inventory_ui.close()
 	if shop_ui.is_open:
 		shop_ui.close()
-	if slot_ui.is_open:
-		slot_ui.close()
+	slot_ui.clear_notice()
 	_clear_bobbers()
 	fish_select_ui.open(carried_fish())
 
@@ -316,8 +311,6 @@ func _on_interact_range_exited(body: Node3D) -> void:
 			_close_shop()
 	elif body == _nearby_machine:
 		_nearby_machine = null
-		if slot_ui.is_open:
-			_close_slot_machine()
 	_update_prompts()
 
 ## Both prompts sit in the same spot, so only one is shown at a time - the
@@ -373,14 +366,6 @@ func _on_sell_all_requested() -> void:
 
 # ── Slot machine ──────────────────────────────────────────────────────────────
 
-func _open_slot_machine(machine: SlotMachine) -> void:
-	slot_ui.open(machine)
-	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-
-func _close_slot_machine() -> void:
-	slot_ui.close()
-	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
-
 ## One pull of the machine the player is standing at. The money is taken and
 ## any prize is in the inventory before this returns - the reels only show it.
 ## Returns {"ok": true, "spell": SpellData or null for nothing} for a pull that
@@ -402,16 +387,20 @@ func gamble(machine: SlotMachine) -> Dictionary:
 		inventory.add_or_place(SpellCharm.create(spell))
 	return {"ok": true, "spell": spell}
 
-func _on_pull_requested() -> void:
-	if _nearby_machine == null or slot_ui.is_spinning():
+## E at a machine is the pull: the money and the prize are settled here and
+## then the cabinet runs its own drums, out in the world, with nothing on
+## screen to close. The HUD line only says where a won charm went - which way
+## the pull went is written on the machine's own price tag.
+func _pull_machine(machine: SlotMachine) -> void:
+	if machine == null or machine.is_spinning():
 		return
-	var result := gamble(_nearby_machine)
+	var result := gamble(machine)
 	if not result["ok"]:
-		slot_ui.refuse(result["reason"])
+		slot_ui.notice(result["reason"], UISlotMachine.C_LOSE)
+		machine.refuse(result["reason"])
 		return
-	if _nearby_machine.sfx_pull != null:
-		audio.play_ui(_nearby_machine.sfx_pull)
-	slot_ui.spin(result["spell"])
+	machine.spin_finished.connect(slot_ui.won, CONNECT_ONE_SHOT)
+	machine.spin(result["spell"])
 
 # ── Fishing ───────────────────────────────────────────────────────────────────
 
